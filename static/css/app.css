@@ -1,0 +1,28 @@
+/* Primary color tokens */
+:root {
+  --color-primary: #1a1a1a;
+  --color-primary-hover: #333333;
+  --color-primary-active: #404040;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #f0f0f0;
+    --color-primary-hover: #d4d4d4;
+    --color-primary-active: #c0c0c0;
+  }
+}
+
+/* HTMX swap transitions */
+#main-content {
+  transition: opacity 150ms ease-in-out;
+}
+
+.htmx-swapping {
+  opacity: 0;
+}
+
+/* Smooth content appearance */
+.htmx-settling {
+  opacity: 1;
+}

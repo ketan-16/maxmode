@@ -1,0 +1,12 @@
+[project]
+name = "maxmode"
+version = "0.1.0"
+description = "A no-bs, snappy, self-hosted weight and calorie tracker"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.129.1",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.22",
+    "uvicorn>=0.41.0",
+]
