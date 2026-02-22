@@ -7,7 +7,7 @@
     <p id="latest-weight-time" class="text-sm text-gray-500 dark:text-gray-400 mt-2">No entries yet</p>
   </div>
 
-  <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-push-url="true"
+  <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
      class="mt-6 flex items-center justify-center gap-2 py-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white dark:text-gray-900 font-semibold rounded-xl transition-colors">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>

@@ -210,7 +210,11 @@ window.MaxMode = (function () {
 
   // ── Event Listeners ───────────────────────────────────────────────
   document.addEventListener("DOMContentLoaded", onPageLoad);
-  document.body.addEventListener("htmx:afterSettle", onPageLoad);
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.detail && e.detail.target && e.detail.target.id === "main-content") {
+      onPageLoad();
+    }
+  });
 
   // Close weight modal on Escape key
   document.addEventListener("keydown", function (e) {

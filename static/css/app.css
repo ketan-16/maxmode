@@ -3,6 +3,7 @@
   --color-primary: #1a1a1a;
   --color-primary-hover: #333333;
   --color-primary-active: #404040;
+  --page-transition-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -13,16 +14,70 @@
   }
 }
 
-/* HTMX swap transitions */
-#main-content {
-  transition: opacity 150ms ease-in-out;
+/* Page transition baseline and HTMX fallback */
+html.no-view-transition #main-content {
+  transform-origin: top center;
+  transition:
+    opacity 40ms var(--page-transition-ease),
+    transform 40ms var(--page-transition-ease);
 }
 
-.htmx-swapping {
+html.no-view-transition .htmx-swapping {
   opacity: 0;
+  transform: translateY(5px) scale(0.996);
 }
 
-/* Smooth content appearance */
-.htmx-settling {
+html.no-view-transition .htmx-settling {
   opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@supports (view-transition-name: page-content) {
+  html.has-view-transition #main-content {
+    view-transition-name: page-content;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    ::view-transition-old(page-content) {
+      animation: page-content-out 70ms var(--page-transition-ease) both;
+    }
+
+    ::view-transition-new(page-content) {
+      animation: page-content-in 130ms var(--page-transition-ease) both;
+    }
+  }
+}
+
+@keyframes page-content-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(5px) scale(0.994);
+  }
+}
+
+@keyframes page-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #main-content,
+  .htmx-swapping,
+  .htmx-settling,
+  ::view-transition-old(page-content),
+  ::view-transition-new(page-content) {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

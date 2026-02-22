@@ -31,6 +31,14 @@
 
   <!-- HTMX -->
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script>
+    var hasViewTransition = typeof document.startViewTransition === "function";
+    document.documentElement.classList.add(hasViewTransition ? "has-view-transition" : "no-view-transition");
+
+    if (window.htmx) {
+      htmx.config.globalViewTransitions = hasViewTransition;
+    }
+  </script>
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/app.css">
@@ -62,20 +70,20 @@
   <!-- Navbar -->
   <nav class="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
     <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-      <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true"
+      <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
          class="text-lg font-bold text-primary tracking-tight">
         MaxMode
       </a>
       <div class="flex items-center gap-5">
-        <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true"
+        <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
            class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">
           Dashboard
         </a>
-        <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-push-url="true"
+        <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
            class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">
           Weights
         </a>
-        <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-push-url="true">
+        <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true">
           <img id="nav-avatar"
                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect width='36' height='36' rx='18' fill='%23e5e7eb'/%3E%3C/svg%3E"
                alt="Avatar"
