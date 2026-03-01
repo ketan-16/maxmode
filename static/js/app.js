@@ -25,6 +25,10 @@ window.MaxMode = (function () {
   var lastWeightUiMode = null;
   var resizeFrame = null;
   var globalEventsBound = false;
+  var weightModalScrollY = 0;
+  var weightModalScrollLocked = false;
+  var weightModalUnlockTimer = null;
+  var weightModalViewportCleanup = null;
 
   // ── Storage Helpers ───────────────────────────────────────────────
   function getUser() {
@@ -189,6 +193,100 @@ window.MaxMode = (function () {
     return window.matchMedia("(max-width: 1024px)").matches || /Android|iPhone|iPod|Mobile|Tablet/i.test(ua);
   }
 
+  function clearWeightModalUnlockWaiters() {
+    if (weightModalUnlockTimer !== null) {
+      window.clearTimeout(weightModalUnlockTimer);
+      weightModalUnlockTimer = null;
+    }
+
+    if (typeof weightModalViewportCleanup === "function") {
+      var cleanup = weightModalViewportCleanup;
+      weightModalViewportCleanup = null;
+      cleanup();
+    }
+  }
+
+  function lockWeightModalScroll() {
+    clearWeightModalUnlockWaiters();
+    if (weightModalScrollLocked) return;
+
+    weightModalScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.classList.add("modal-scroll-locked");
+    document.body.style.top = "-" + weightModalScrollY + "px";
+    weightModalScrollLocked = true;
+  }
+
+  function unlockWeightModalScrollNow() {
+    clearWeightModalUnlockWaiters();
+    if (!weightModalScrollLocked) return;
+
+    var restoreY = weightModalScrollY;
+    document.body.classList.remove("modal-scroll-locked");
+    document.body.style.top = "";
+    window.scrollTo(0, restoreY);
+    requestAnimationFrame(function () {
+      window.scrollTo(0, restoreY);
+    });
+
+    weightModalScrollLocked = false;
+  }
+
+  function unlockWeightModalScrollAfterKeyboard() {
+    clearWeightModalUnlockWaiters();
+    if (!weightModalScrollLocked) return;
+
+    if (window.visualViewport && isMobileWeightUI()) {
+      var viewport = window.visualViewport;
+      var deadlineTs = Date.now() + 420;
+
+      function finalizeUnlock() {
+        unlockWeightModalScrollNow();
+      }
+
+      function queueUnlock() {
+        if (weightModalUnlockTimer !== null) {
+          window.clearTimeout(weightModalUnlockTimer);
+        }
+
+        var msLeft = deadlineTs - Date.now();
+        var delay = msLeft <= 0 ? 0 : Math.min(120, msLeft);
+        weightModalUnlockTimer = window.setTimeout(finalizeUnlock, delay);
+      }
+
+      function onViewportChange() {
+        queueUnlock();
+      }
+
+      viewport.addEventListener("resize", onViewportChange);
+      viewport.addEventListener("scroll", onViewportChange);
+      weightModalViewportCleanup = function () {
+        viewport.removeEventListener("resize", onViewportChange);
+        viewport.removeEventListener("scroll", onViewportChange);
+      };
+
+      queueUnlock();
+      return;
+    }
+
+    unlockWeightModalScrollNow();
+  }
+
+  function focusWeightInput(input, selectValue) {
+    if (!input) return;
+
+    window.setTimeout(function () {
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+
+      if (selectValue) {
+        input.select();
+      }
+    }, 0);
+  }
+
   function refreshWeightDerivedViews() {
     populateDashboard();
     populateProfile();
@@ -293,11 +391,11 @@ window.MaxMode = (function () {
   // ── Weights ───────────────────────────────────────────────────────
   function desktopWeightRowHtml(weight) {
     var id = escapeHtml(weight.id);
-    return '<tr class="border-b border-gray-100 dark:border-gray-700/50 last:border-0">'
-      + '<td class="px-4 py-3 text-sm">' + escapeHtml(formatDate(weight.timestamp)) + "</td>"
-      + '<td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">' + escapeHtml(formatTime(weight.timestamp)) + "</td>"
-      + '<td class="px-4 py-3 text-sm font-semibold text-right">' + escapeHtml(weight.weight + " " + weight.unit) + "</td>"
-      + '<td class="px-4 py-3 text-right align-middle weight-actions-cell">'
+    return '<tr class="apple-table-row">'
+      + '<td class="apple-table-cell">' + escapeHtml(formatDate(weight.timestamp)) + "</td>"
+      + '<td class="apple-table-cell apple-table-cell-muted">' + escapeHtml(formatTime(weight.timestamp)) + "</td>"
+      + '<td class="apple-table-cell apple-table-cell-strong apple-table-cell-right">' + escapeHtml(weight.weight + " " + weight.unit) + "</td>"
+      + '<td class="apple-table-cell apple-table-cell-right weight-actions-cell">'
       + '<button type="button" class="weight-kebab-trigger" aria-label="Open actions menu" aria-haspopup="menu" aria-expanded="false" data-weight-menu-toggle="' + id + '">'
       + ICONS.KEBAB
       + "</button>"
@@ -606,18 +704,21 @@ window.MaxMode = (function () {
     if (!modal || !input) return;
 
     var isEdit = (typeof weightId === "string" && weightId.length > 0);
+    var entry = null;
 
     if (isEdit) {
-      var entry = getWeightById(weightId);
+      entry = getWeightById(weightId);
       if (!entry) return;
+    }
+
+    lockWeightModalScroll();
+
+    if (isEdit) {
       editingWeightId = entry.id;
       input.value = entry.weight;
       setWeightModalMode(true);
       modal.classList.remove("hidden");
-      window.setTimeout(function () {
-        input.focus();
-        input.select();
-      }, 0);
+      focusWeightInput(input, true);
       return;
     }
 
@@ -625,20 +726,28 @@ window.MaxMode = (function () {
     setWeightModalMode(false);
     modal.classList.remove("hidden");
     input.value = "";
-    window.setTimeout(function () {
-      input.focus();
-    }, 0);
+    focusWeightInput(input, false);
   }
 
   function closeWeightModal() {
     var modal = document.getElementById("weight-modal");
     var input = document.getElementById("weight-input");
+    var active = document.activeElement;
+
+    var modalIsOpen = !!(modal && !modal.classList.contains("hidden"));
+    var activeIsFormControl = !!(active && typeof active.matches === "function" && active.matches("input, textarea, select, [contenteditable='true']"));
+    var shouldBlur = !!(modalIsOpen && active && typeof active.blur === "function" && (active === input || (modal && modal.contains(active)) || activeIsFormControl));
+
+    if (shouldBlur) {
+      active.blur();
+    }
 
     if (modal) modal.classList.add("hidden");
     if (input) input.value = "";
 
     editingWeightId = null;
     setWeightModalMode(false);
+    unlockWeightModalScrollAfterKeyboard();
   }
 
   function openDeleteSheet(weightId) {
@@ -858,6 +967,7 @@ window.MaxMode = (function () {
 
   // ── Master Page Load ──────────────────────────────────────────────
   function onPageLoad() {
+    unlockWeightModalScrollNow();
     bindGlobalEvents();
     checkOnboarding();
     populateDashboard();

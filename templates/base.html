@@ -7,26 +7,27 @@
 
   <!-- PWA -->
   <link rel="manifest" href="/static/manifest.json">
-  <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#f0f0f0" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: 'var(--color-primary)',
-            'primary-hover': 'var(--color-primary-hover)',
-            'primary-active': 'var(--color-primary-active)',
-          }
-        }
+    (function () {
+      var root = document.documentElement;
+
+      function setUiPlatform() {
+        var compact = window.matchMedia("(max-width: 1024px)").matches;
+        var noHover = window.matchMedia("(hover: none)").matches;
+        var coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+        root.setAttribute("data-ui-platform", (compact || noHover || coarsePointer) ? "ios" : "macos");
       }
-    }
+
+      setUiPlatform();
+      window.addEventListener("resize", setUiPlatform, { passive: true });
+    })();
   </script>
 
   <!-- HTMX -->
@@ -43,24 +44,24 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+<body class="app-body">
 
   <!-- Onboarding Overlay -->
-  <div id="onboarding-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 mx-4 max-w-sm w-full">
-      <div class="text-center mb-6">
-        <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <span class="text-2xl font-black text-white dark:text-gray-900">M</span>
+  <div id="onboarding-overlay" class="hidden app-overlay">
+    <div class="apple-modal apple-modal-onboarding">
+      <div class="apple-center">
+        <div class="app-brand-badge">
+          <span class="app-brand-letter">M</span>
         </div>
-        <h2 class="text-2xl font-bold">Welcome to MaxMode</h2>
-        <p class="text-gray-500 dark:text-gray-400 mt-1">Enter your name to get started</p>
+        <h2 class="apple-title apple-title-modal">Welcome to MaxMode</h2>
+        <p class="apple-caption">Enter your name to get started</p>
       </div>
-      <form onsubmit="MaxMode.handleOnboardingSubmit(event)">
+      <form class="apple-form" onsubmit="MaxMode.handleOnboardingSubmit(event)">
         <input type="text" id="onboarding-name"
-               class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-shadow"
+               class="apple-input"
                placeholder="Your name" required autofocus>
         <button type="submit"
-                class="w-full mt-4 py-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white dark:text-gray-900 font-semibold rounded-xl transition-colors">
+                class="apple-btn apple-btn-primary apple-btn-block">
           Get Started
         </button>
       </form>
@@ -68,33 +69,34 @@
   </div>
 
   <!-- Navbar -->
-  <nav class="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
-    <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+  <nav class="app-nav">
+    <div class="app-nav-inner">
       <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
-         class="text-lg font-bold text-primary tracking-tight">
+         class="app-logo">
         MaxMode
       </a>
-      <div class="flex items-center gap-5">
+      <div class="app-nav-links">
         <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
-           class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">
+           class="app-nav-link">
           Dashboard
         </a>
         <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
-           class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">
+           class="app-nav-link">
           Weights
         </a>
-        <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true">
+        <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
+           class="app-nav-avatar-link">
           <img id="nav-avatar"
-               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect width='36' height='36' rx='18' fill='%23e5e7eb'/%3E%3C/svg%3E"
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect width='36' height='36' rx='18' fill='%23e5e5ea'/%3E%3C/svg%3E"
                alt="Avatar"
-               class="w-9 h-9 rounded-full border-2 border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-700 object-cover">
+               class="app-nav-avatar">
         </a>
       </div>
     </div>
   </nav>
 
   <!-- Main Content -->
-  <main id="main-content" class="max-w-2xl mx-auto px-4 py-8">
+  <main id="main-content" class="app-main">
     {% block content %}{% endblock %}
   </main>
 

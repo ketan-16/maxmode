@@ -4,41 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Offline - MaxMode</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; padding: 2rem;
-      background: #f9fafb; color: #111827;
-    }
-    @media (prefers-color-scheme: dark) {
-      body { background: #111827; color: #f9fafb; }
-      .card { background: #1f2937; border-color: #374151; }
-      .btn { background: #f0f0f0; color: #111827; }
-      .btn:hover { background: #d4d4d4; }
-    }
-    .card {
-      text-align: center; padding: 3rem 2rem; max-width: 24rem; width: 100%;
-      background: #fff; border: 1px solid #e5e7eb; border-radius: 1rem;
-    }
-    .icon { font-size: 3rem; margin-bottom: 1rem; }
-    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
-    p { color: #6b7280; margin-bottom: 1.5rem; font-size: 0.95rem; }
-    .btn {
-      display: inline-block; padding: 0.75rem 1.5rem;
-      background: #1a1a1a; color: #fff; border: none; border-radius: 0.75rem;
-      font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.15s;
-    }
-    .btn:hover { background: #333333; }
-  </style>
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+  <script>
+    (function () {
+      var root = document.documentElement;
+
+      function setUiPlatform() {
+        var compact = window.matchMedia("(max-width: 1024px)").matches;
+        var noHover = window.matchMedia("(hover: none)").matches;
+        var coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+        root.setAttribute("data-ui-platform", (compact || noHover || coarsePointer) ? "ios" : "macos");
+      }
+
+      setUiPlatform();
+      window.addEventListener("resize", setUiPlatform, { passive: true });
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body>
-  <div class="card">
-    <div class="icon">📡</div>
-    <h1>You're Offline</h1>
-    <p>Check your internet connection and try again.</p>
-    <button class="btn" onclick="location.reload()">Retry</button>
-  </div>
+<body class="app-body offline-body">
+  <main class="offline-main">
+    <section class="apple-card offline-card">
+      <div class="offline-icon" aria-hidden="true">📡</div>
+      <h1 class="apple-title offline-title">You're Offline</h1>
+      <p class="apple-caption offline-copy">Check your internet connection and try again.</p>
+      <button class="apple-btn apple-btn-primary" onclick="location.reload()">Retry</button>
+    </section>
+  </main>
 </body>
 </html>
