@@ -1,10 +1,61 @@
 <section class="app-section">
   <h1 class="apple-title">Dashboard</h1>
 
-  <div class="apple-card app-card">
-    <p class="apple-overline">Latest Logged Weight</p>
-    <p id="latest-weight-value" class="apple-metric">--</p>
-    <p id="latest-weight-time" class="apple-caption">No entries yet</p>
+  <div class="apple-card app-card dashboard-weight-card">
+    <div class="dashboard-weight-layout">
+      <section class="dashboard-weight-main">
+        <div class="dashboard-weight-hero">
+          <p class="apple-overline">Latest Logged Weight</p>
+          <p id="latest-weight-value" class="apple-metric">--</p>
+          <p id="latest-weight-time" class="apple-caption">No entries yet</p>
+          <div class="dashboard-weight-chart-header">
+            <p class="apple-overline">Weight Trend</p>
+            <p id="dashboard-trend-note" class="apple-caption dashboard-weight-trend-note">Log weights to view trend.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="dashboard-weight-side" aria-live="polite">
+        <div class="dashboard-weight-primary-metrics">
+          <article class="dashboard-weight-metric-inline">
+            <p class="dashboard-weight-metric-label">30D Change</p>
+            <p id="dashboard-primary-change-30d" class="dashboard-weight-metric-value">--</p>
+          </article>
+          <article class="dashboard-weight-metric-inline">
+            <p class="dashboard-weight-metric-label">30D Avg</p>
+            <p id="dashboard-primary-avg-30d" class="dashboard-weight-metric-value">--</p>
+          </article>
+        </div>
+
+        <div class="dashboard-weight-insights">
+          <button type="button"
+                  id="dashboard-insights-toggle"
+                  class="dashboard-weight-insights-toggle"
+                  aria-expanded="false"
+                  aria-controls="dashboard-insights-panel">
+            More insights
+          </button>
+          <div id="dashboard-insights-panel" class="dashboard-weight-insights-panel" hidden>
+            <div class="dashboard-weight-secondary-metrics">
+              <article class="dashboard-weight-metric-inline dashboard-weight-metric-secondary">
+                <p class="dashboard-weight-metric-label">7D Change</p>
+                <p id="dashboard-detail-change-7d" class="dashboard-weight-metric-value">--</p>
+              </article>
+              <article class="dashboard-weight-metric-inline dashboard-weight-metric-secondary">
+                <p class="dashboard-weight-metric-label">Entries</p>
+                <p id="dashboard-detail-entries" class="dashboard-weight-metric-value">0</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="dashboard-weight-chart">
+        <div class="weight-chart-shell weight-chart-shell-embedded">
+          <div id="dashboard-weight-chart" class="weight-chart-plot" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"

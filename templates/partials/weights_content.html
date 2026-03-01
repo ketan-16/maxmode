@@ -1,6 +1,6 @@
 <section class="app-section">
   <div class="app-section-header">
-    <h1 class="apple-title apple-title-no-margin">Weight Log</h1>
+    <h1 class="apple-title apple-title-no-margin">Weights</h1>
     <button onclick="MaxMode.openWeightModal()"
             class="apple-btn apple-btn-primary apple-btn-compact apple-btn-with-icon">
       <svg class="apple-icon apple-icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -9,6 +9,22 @@
       Log Weight
     </button>
   </div>
+
+  <h2 class="apple-subtitle weight-section-title">Weight Trend</h2>
+  <div class="apple-card app-card weight-chart-card">
+    <div id="weights-chart-shell" class="weight-chart-shell weight-chart-shell-interactive">
+      <div id="weights-chart-range" class="weight-chart-range" role="group" aria-label="Select chart timeframe">
+        <button type="button" class="weight-chart-range-btn" data-chart-range="7d">7D</button>
+        <button type="button" class="weight-chart-range-btn is-active" data-chart-range="30d">30D</button>
+        <button type="button" class="weight-chart-range-btn" data-chart-range="90d">90D</button>
+        <button type="button" class="weight-chart-range-btn" data-chart-range="all">All</button>
+      </div>
+      <div id="weights-weight-chart" class="weight-chart-plot" aria-live="polite"></div>
+      <div id="weights-chart-tooltip" class="weight-chart-tooltip hidden" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <h2 class="apple-subtitle weight-section-title weight-section-title-log">Weight Log</h2>
 
   <!-- Weight Modal -->
   <div id="weight-modal" class="hidden app-overlay app-overlay-weight" aria-hidden="true">
@@ -34,9 +50,9 @@
     </div>
   </div>
 
-  <!-- Mobile Weight List -->
-  <div id="weight-mobile-list-container" class="hidden weight-mobile-container">
-    <div id="weight-mobile-list" class="weight-mobile-list"></div>
+  <!-- Mobile Weight List Groups -->
+  <div id="weight-mobile-groups-container" class="hidden weight-mobile-container">
+    <div id="weight-mobile-groups" class="weight-log-groups"></div>
   </div>
 
   <!-- Empty State -->
@@ -49,22 +65,9 @@
     <p class="apple-caption">Click "Log Weight" to add your first entry</p>
   </div>
 
-  <!-- Weight Table -->
-  <div id="weight-table-container" class="hidden">
-    <div class="apple-card apple-table-card">
-      <table class="apple-table">
-        <thead>
-          <tr class="apple-table-head-row">
-            <th class="apple-table-head-cell">Date</th>
-            <th class="apple-table-head-cell">Time</th>
-            <th class="apple-table-head-cell apple-table-head-cell-right">Weight</th>
-            <th class="apple-table-head-cell apple-table-head-cell-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="weight-table-body" class="apple-table-body">
-        </tbody>
-      </table>
-    </div>
+  <!-- Desktop Weight List Groups -->
+  <div id="weight-desktop-groups-container" class="hidden">
+    <div id="weight-desktop-groups" class="weight-log-groups"></div>
   </div>
 
   <!-- Delete Confirmation Sheet -->

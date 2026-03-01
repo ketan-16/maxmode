@@ -17,6 +17,12 @@ window.MaxMode = (function () {
     EDIT: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg>',
     DELETE: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm12-15h-3.5l-1-1h-5l-1 1H4v2h14V4z"></path></svg>'
   };
+  const WEIGHT_CHART_RANGES = {
+    "7d": 7 * 24 * 60 * 60 * 1000,
+    "30d": 30 * 24 * 60 * 60 * 1000,
+    "90d": 90 * 24 * 60 * 60 * 1000,
+    all: null
+  };
 
   var editingWeightId = null;
   var pendingDeleteWeightId = null;
@@ -31,6 +37,10 @@ window.MaxMode = (function () {
   var weightModalViewportCleanup = null;
   var weightModalTransitionCleanup = null;
   var deleteSheetTransitionCleanup = null;
+  var chartRefreshFrame = null;
+  var chartThemeEventsBound = false;
+  var weightChartRange = "30d";
+  var dashboardInsightsExpanded = false;
 
   // ── Storage Helpers ───────────────────────────────────────────────
   function getUser() {
@@ -173,6 +183,31 @@ window.MaxMode = (function () {
     var days = Math.floor(hrs / 24);
     if (days < 7) return days + "d ago";
     return formatDate(iso);
+  }
+
+  function relativeTimeStrict(iso) {
+    var timestamp = new Date(iso).getTime();
+    if (!isFinite(timestamp)) return "No entries yet";
+
+    var diff = Date.now() - timestamp;
+    if (!isFinite(diff) || diff < 0) diff = 0;
+
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return mins + "m ago";
+
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+
+    var days = Math.floor(hrs / 24);
+    if (days <= 2) return "yesterday";
+    if (days < 30) return days + "d ago";
+
+    var months = Math.floor(days / 30);
+    if (months < 12) return months + "mo ago";
+
+    var years = Math.max(1, Math.floor(days / 365));
+    return years + "y ago";
   }
 
   // ── Utility ───────────────────────────────────────────────────────
@@ -385,6 +420,610 @@ window.MaxMode = (function () {
     populateProfile();
   }
 
+  function getChartReadyWeights(weights) {
+    var source = Array.isArray(weights) ? weights : getWeights();
+    var points = [];
+
+    for (var i = 0; i < source.length; i++) {
+      var entry = source[i];
+      if (!entry || typeof entry !== "object") continue;
+
+      var parsedWeight = (typeof entry.weight === "number") ? entry.weight : parseFloat(entry.weight);
+      var parsedTimestamp = new Date(entry.timestamp).getTime();
+
+      if (!isFinite(parsedWeight) || parsedWeight <= 0) continue;
+      if (!isFinite(parsedTimestamp)) continue;
+
+      points.push({
+        id: entry.id,
+        weight: parsedWeight,
+        unit: entry.unit || "kg",
+        iso: entry.timestamp,
+        timestamp: parsedTimestamp
+      });
+    }
+
+    points.sort(function (a, b) {
+      return a.timestamp - b.timestamp;
+    });
+
+    return points;
+  }
+
+  function filterWeightSeriesForRange(points, rangeKey) {
+    if (!Array.isArray(points) || points.length === 0) return [];
+    if (!Object.prototype.hasOwnProperty.call(WEIGHT_CHART_RANGES, rangeKey) || rangeKey === "all") {
+      return points.slice();
+    }
+
+    var windowMs = WEIGHT_CHART_RANGES[rangeKey];
+    if (!windowMs) return points.slice();
+
+    var latestTimestamp = points[points.length - 1].timestamp;
+    var cutoff = latestTimestamp - windowMs;
+    var filtered = [];
+
+    for (var i = 0; i < points.length; i++) {
+      if (points[i].timestamp >= cutoff) filtered.push(points[i]);
+    }
+
+    if (filtered.length === 1) {
+      for (var j = points.length - 1; j >= 0; j--) {
+        if (points[j].timestamp < cutoff) {
+          filtered.unshift(points[j]);
+          break;
+        }
+      }
+    }
+
+    return filtered;
+  }
+
+  function weightChartRangeLabel(rangeKey) {
+    if (rangeKey === "7d") return "last 7 days";
+    if (rangeKey === "30d") return "last 30 days";
+    if (rangeKey === "90d") return "last 90 days";
+    return "all time";
+  }
+
+  function formatWeightNumber(value) {
+    var rounded = Math.round(value * 10) / 10;
+    if (Math.abs(rounded - Math.round(rounded)) < 0.01) {
+      return String(Math.round(rounded));
+    }
+    return rounded.toFixed(1);
+  }
+
+  function formatSignedWeightDelta(value, unit) {
+    if (typeof value !== "number" || !isFinite(value)) return "--";
+
+    var normalizedUnit = unit || "kg";
+    var magnitude = Math.abs(value);
+    if (magnitude < 0.05) return "0 " + normalizedUnit;
+
+    var sign = value > 0 ? "+" : "-";
+    return sign + formatWeightNumber(magnitude) + " " + normalizedUnit;
+  }
+
+  function buildDashboardTrendNote(change30d, unit) {
+    if (typeof change30d !== "number" || !isFinite(change30d)) {
+      return "Add one more entry to unlock 30D trend insights.";
+    }
+
+    var normalizedUnit = unit || "kg";
+    if (Math.abs(change30d) < 0.05) {
+      return "Stable over the last 30 days.";
+    }
+
+    var direction = change30d > 0 ? "Up" : "Down";
+    return direction + " " + formatWeightNumber(Math.abs(change30d)) + " " + normalizedUnit + " over 30 days.";
+  }
+
+  function getDashboardChartRenderKey(series, chartWidth) {
+    if (!Array.isArray(series) || series.length === 0) {
+      return "empty";
+    }
+
+    var parts = [String(chartWidth), String(series.length)];
+    for (var i = 0; i < series.length; i++) {
+      parts.push(String(series[i].timestamp));
+      parts.push(String(series[i].weight));
+    }
+    return parts.join("|");
+  }
+
+  function formatChartDate(timestamp, includeYear) {
+    var date = new Date(timestamp);
+    var options = { month: "short", day: "numeric" };
+    if (includeYear) options.year = "2-digit";
+    return date.toLocaleDateString(undefined, options);
+  }
+
+  function buildSmoothLinePath(points) {
+    if (!points || points.length === 0) return "";
+
+    if (points.length === 1) {
+      var only = points[0];
+      var x1 = (only.x - 0.01).toFixed(2);
+      var x2 = (only.x + 0.01).toFixed(2);
+      var y = only.y.toFixed(2);
+      return "M " + x1 + " " + y + " L " + x2 + " " + y;
+    }
+
+    var first = points[0];
+    var path = "M " + first.x.toFixed(2) + " " + first.y.toFixed(2);
+
+    for (var i = 0; i < points.length - 1; i++) {
+      var p0 = points[Math.max(0, i - 1)];
+      var p1 = points[i];
+      var p2 = points[i + 1];
+      var p3 = points[Math.min(points.length - 1, i + 2)];
+
+      var cp1x = p1.x + ((p2.x - p0.x) / 6);
+      var cp1y = p1.y + ((p2.y - p0.y) / 6);
+      var cp2x = p2.x - ((p3.x - p1.x) / 6);
+      var cp2y = p2.y - ((p3.y - p1.y) / 6);
+
+      path += " C "
+        + cp1x.toFixed(2) + " " + cp1y.toFixed(2) + ", "
+        + cp2x.toFixed(2) + " " + cp2y.toFixed(2) + ", "
+        + p2.x.toFixed(2) + " " + p2.y.toFixed(2);
+    }
+
+    return path;
+  }
+
+  function buildWeightChartModel(points, options) {
+    var interactive = !!(options && options.interactive);
+    var widthInput = options && options.width ? Math.floor(options.width) : 0;
+    var width = Math.max(300, widthInput || 640);
+    var height = interactive ? 248 : 220;
+
+    var padding = interactive
+      ? { top: 54, right: 18, bottom: 30, left: 48 }
+      : { top: 24, right: 18, bottom: 30, left: 48 };
+
+    var plotLeft = padding.left;
+    var plotTop = padding.top;
+    var plotWidth = Math.max(120, width - padding.left - padding.right);
+    var plotHeight = Math.max(90, height - padding.top - padding.bottom);
+    var plotRight = plotLeft + plotWidth;
+    var plotBottom = plotTop + plotHeight;
+
+    var minWeight = points[0].weight;
+    var maxWeight = points[0].weight;
+    var minTimestamp = points[0].timestamp;
+    var maxTimestamp = points[points.length - 1].timestamp;
+
+    for (var i = 1; i < points.length; i++) {
+      var weight = points[i].weight;
+      if (weight < minWeight) minWeight = weight;
+      if (weight > maxWeight) maxWeight = weight;
+    }
+
+    var spread = maxWeight - minWeight;
+    var pad = spread === 0 ? Math.max(0.8, maxWeight * 0.02) : Math.max(0.5, spread * 0.18);
+    var domainMin = Math.max(0, minWeight - pad);
+    var domainMax = maxWeight + pad;
+
+    if ((domainMax - domainMin) < 0.1) {
+      domainMax = domainMin + 0.1;
+    }
+
+    var domainSpan = domainMax - domainMin;
+    var timeSpan = maxTimestamp - minTimestamp;
+    var singleTimestamp = timeSpan <= 0;
+
+    function xForTimestamp(timestamp) {
+      if (singleTimestamp) return plotLeft + (plotWidth / 2);
+      return plotLeft + (((timestamp - minTimestamp) / timeSpan) * plotWidth);
+    }
+
+    function yForWeight(weight) {
+      return plotTop + ((1 - ((weight - domainMin) / domainSpan)) * plotHeight);
+    }
+
+    var projected = new Array(points.length);
+    for (var p = 0; p < points.length; p++) {
+      var point = points[p];
+      projected[p] = {
+        id: point.id,
+        weight: point.weight,
+        unit: point.unit,
+        iso: point.iso,
+        timestamp: point.timestamp,
+        x: xForTimestamp(point.timestamp),
+        y: yForWeight(point.weight)
+      };
+    }
+
+    var linePath = buildSmoothLinePath(projected);
+    var areaPath = "";
+    if (projected.length > 1 && linePath) {
+      areaPath = linePath
+        + " L " + projected[projected.length - 1].x.toFixed(2) + " " + plotBottom.toFixed(2)
+        + " L " + projected[0].x.toFixed(2) + " " + plotBottom.toFixed(2)
+        + " Z";
+    }
+
+    var yTicks = [];
+    for (var yIndex = 0; yIndex <= 4; yIndex++) {
+      var yRatio = yIndex / 4;
+      yTicks.push({
+        y: plotTop + (yRatio * plotHeight),
+        value: domainMax - (yRatio * domainSpan)
+      });
+    }
+
+    var xTicks = [];
+    var includeYear = new Date(minTimestamp).getFullYear() !== new Date(maxTimestamp).getFullYear();
+    var tickIndices = [0, Math.floor((projected.length - 1) / 2), projected.length - 1];
+    var seen = {};
+
+    for (var t = 0; t < tickIndices.length; t++) {
+      var idx = tickIndices[t];
+      if (seen[idx]) continue;
+      seen[idx] = true;
+
+      xTicks.push({
+        x: projected[idx].x,
+        label: formatChartDate(projected[idx].timestamp, includeYear)
+      });
+    }
+
+    var safeId = (options && options.chartId ? String(options.chartId) : "chart").replace(/[^a-zA-Z0-9_-]/g, "");
+    var gradientId = "weight-chart-gradient-" + safeId;
+
+    return {
+      width: width,
+      height: height,
+      plotLeft: plotLeft,
+      plotRight: plotRight,
+      plotTop: plotTop,
+      plotBottom: plotBottom,
+      plotWidth: plotWidth,
+      plotHeight: plotHeight,
+      linePath: linePath,
+      areaPath: areaPath,
+      points: projected,
+      yTicks: yTicks,
+      xTicks: xTicks,
+      gradientId: gradientId,
+      interactive: interactive
+    };
+  }
+
+  function buildWeightChartSvg(model) {
+    var parts = [];
+    parts.push('<svg class="weight-chart-svg weight-chart-animated" viewBox="0 0 ' + model.width + " " + model.height + '" role="img" aria-label="Weight trend chart">');
+    parts.push("<defs>");
+    parts.push('<linearGradient id="' + model.gradientId + '" x1="0" y1="0" x2="0" y2="1">');
+    parts.push('<stop offset="0%" class="weight-chart-area-stop-start"></stop>');
+    parts.push('<stop offset="100%" class="weight-chart-area-stop-end"></stop>');
+    parts.push("</linearGradient>");
+    parts.push("</defs>");
+
+    parts.push('<g class="weight-chart-grid">');
+    for (var i = 0; i < model.yTicks.length; i++) {
+      var yTick = model.yTicks[i];
+      parts.push('<line class="weight-chart-grid-line" x1="' + model.plotLeft.toFixed(2) + '" y1="' + yTick.y.toFixed(2) + '" x2="' + model.plotRight.toFixed(2) + '" y2="' + yTick.y.toFixed(2) + '"></line>');
+      parts.push('<text class="weight-chart-axis-label" x="' + (model.plotLeft - 10).toFixed(2) + '" y="' + (yTick.y + 4).toFixed(2) + '" text-anchor="end">' + escapeHtml(formatWeightNumber(yTick.value)) + "</text>");
+    }
+
+    for (var xIndex = 0; xIndex < model.xTicks.length; xIndex++) {
+      var xTick = model.xTicks[xIndex];
+      parts.push('<text class="weight-chart-axis-label" x="' + xTick.x.toFixed(2) + '" y="' + (model.plotBottom + 18).toFixed(2) + '" text-anchor="middle">' + escapeHtml(xTick.label) + "</text>");
+    }
+    parts.push("</g>");
+
+    if (model.areaPath) {
+      parts.push('<path class="weight-chart-path-area" d="' + model.areaPath + '" fill="url(#' + model.gradientId + ')"></path>');
+    }
+
+    parts.push('<path class="weight-chart-path-line" pathLength="1" d="' + model.linePath + '"></path>');
+
+    parts.push('<g class="weight-chart-points">');
+    for (var pointIndex = 0; pointIndex < model.points.length; pointIndex++) {
+      var point = model.points[pointIndex];
+      parts.push('<circle class="weight-chart-point" cx="' + point.x.toFixed(2) + '" cy="' + point.y.toFixed(2) + '" r="' + (model.interactive ? "2.9" : "2.5") + '"></circle>');
+    }
+    parts.push("</g>");
+
+    if (model.interactive) {
+      parts.push('<line class="weight-chart-hover-line hidden" x1="0" y1="' + model.plotTop.toFixed(2) + '" x2="0" y2="' + model.plotBottom.toFixed(2) + '"></line>');
+      parts.push('<circle class="weight-chart-hover-dot hidden" cx="0" cy="0" r="5"></circle>');
+      parts.push('<rect class="weight-chart-hit-area" x="' + model.plotLeft.toFixed(2) + '" y="' + model.plotTop.toFixed(2) + '" width="' + model.plotWidth.toFixed(2) + '" height="' + model.plotHeight.toFixed(2) + '" rx="10" ry="10"></rect>');
+    }
+
+    parts.push("</svg>");
+    return parts.join("");
+  }
+
+  function renderWeightChartEmpty(container, message) {
+    if (!container) return;
+    container.innerHTML = '<div class="weight-chart-empty">' + escapeHtml(message) + "</div>";
+  }
+
+  function renderDashboardWeightChartFromSeries(series) {
+    var container = document.getElementById("dashboard-weight-chart");
+    if (!container) return;
+
+    if (series.length === 0) {
+      if (container.dataset.chartKey === "empty") return;
+      renderWeightChartEmpty(container, "Log weights to view your trend.");
+      container.dataset.chartKey = "empty";
+      return;
+    }
+
+    var width = Math.floor(container.clientWidth || container.getBoundingClientRect().width || 0);
+    var chartWidth = Math.max(300, width || 640);
+    var nextKey = getDashboardChartRenderKey(series, chartWidth);
+
+    if (container.dataset.chartKey === nextKey) return;
+
+    var model = buildWeightChartModel(series, {
+      width: chartWidth,
+      interactive: false,
+      chartId: "dashboard"
+    });
+
+    container.innerHTML = buildWeightChartSvg(model);
+    container.dataset.chartKey = nextKey;
+  }
+
+  function renderDashboardWeightChart(weights) {
+    renderDashboardWeightChartFromSeries(getChartReadyWeights(weights));
+  }
+
+  function setDashboardInsightsExpanded(expanded) {
+    dashboardInsightsExpanded = !!expanded;
+
+    var toggle = document.getElementById("dashboard-insights-toggle");
+    var panel = document.getElementById("dashboard-insights-panel");
+
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", dashboardInsightsExpanded ? "true" : "false");
+    }
+
+    if (panel) {
+      panel.hidden = !dashboardInsightsExpanded;
+    }
+  }
+
+  function bindDashboardInsightsToggle() {
+    var toggle = document.getElementById("dashboard-insights-toggle");
+    if (!toggle) return;
+
+    if (toggle.dataset.bound !== "1") {
+      toggle.dataset.bound = "1";
+      dashboardInsightsExpanded = false;
+      toggle.addEventListener("click", function () {
+        setDashboardInsightsExpanded(!dashboardInsightsExpanded);
+      });
+    }
+
+    setDashboardInsightsExpanded(dashboardInsightsExpanded);
+  }
+
+  function updateWeightChartRangeButtons() {
+    var rangeControl = document.getElementById("weights-chart-range");
+    if (!rangeControl) return;
+
+    var buttons = rangeControl.querySelectorAll("[data-chart-range]");
+    for (var i = 0; i < buttons.length; i++) {
+      var button = buttons[i];
+      var isActive = button.getAttribute("data-chart-range") === weightChartRange;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    }
+  }
+
+  function bindWeightChartRangeEvents() {
+    var rangeControl = document.getElementById("weights-chart-range");
+    if (!rangeControl || rangeControl.dataset.bound === "1") return;
+
+    rangeControl.dataset.bound = "1";
+    rangeControl.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
+
+      var button = target.closest("[data-chart-range]");
+      if (!button) return;
+
+      var nextRange = button.getAttribute("data-chart-range");
+      if (!Object.prototype.hasOwnProperty.call(WEIGHT_CHART_RANGES, nextRange)) return;
+      if (nextRange === weightChartRange) return;
+
+      weightChartRange = nextRange;
+      renderWeightsTrendChart(getWeights());
+    });
+  }
+
+  function findNearestChartPoint(points, x) {
+    if (!points || points.length === 0) return -1;
+    if (points.length === 1) return 0;
+
+    var low = 0;
+    var high = points.length - 1;
+
+    while (low < high) {
+      var mid = Math.floor((low + high) / 2);
+      if (points[mid].x < x) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    var index = low;
+    if (index > 0) {
+      var prev = points[index - 1];
+      var curr = points[index];
+      if (Math.abs(prev.x - x) <= Math.abs(curr.x - x)) {
+        index = index - 1;
+      }
+    }
+
+    return index;
+  }
+
+  function clearWeightsChartHover(svg, tooltip) {
+    if (svg) {
+      var hoverLine = svg.querySelector(".weight-chart-hover-line");
+      var hoverDot = svg.querySelector(".weight-chart-hover-dot");
+      if (hoverLine) hoverLine.classList.add("hidden");
+      if (hoverDot) hoverDot.classList.add("hidden");
+    }
+
+    if (tooltip) {
+      tooltip.classList.add("hidden");
+      tooltip.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function setWeightsChartHover(model, svg, tooltip, shellRect, index) {
+    if (!svg || !tooltip || !model || !model.points[index]) return;
+
+    var point = model.points[index];
+    var hoverLine = svg.querySelector(".weight-chart-hover-line");
+    var hoverDot = svg.querySelector(".weight-chart-hover-dot");
+
+    if (hoverLine) {
+      hoverLine.setAttribute("x1", point.x.toFixed(2));
+      hoverLine.setAttribute("x2", point.x.toFixed(2));
+      hoverLine.classList.remove("hidden");
+    }
+
+    if (hoverDot) {
+      hoverDot.setAttribute("cx", point.x.toFixed(2));
+      hoverDot.setAttribute("cy", point.y.toFixed(2));
+      hoverDot.classList.remove("hidden");
+    }
+
+    tooltip.textContent = formatWeightNumber(point.weight) + " " + point.unit + " | " + formatDate(point.iso) + " " + formatTime(point.iso);
+    tooltip.classList.remove("hidden");
+    tooltip.setAttribute("aria-hidden", "false");
+
+    var pointXPx = (point.x / model.width) * shellRect.width;
+    var pointYPx = (point.y / model.height) * shellRect.height;
+    var tipWidth = tooltip.offsetWidth || 0;
+    var half = tipWidth / 2;
+    var clampedLeft = pointXPx;
+
+    if (tipWidth > 0) {
+      clampedLeft = Math.max(half + 10, Math.min(shellRect.width - half - 10, pointXPx));
+    }
+
+    var top = Math.max(42, pointYPx - 10);
+    tooltip.style.left = clampedLeft + "px";
+    tooltip.style.top = top + "px";
+  }
+
+  function bindWeightsChartHover(model, svg) {
+    var hitArea = svg ? svg.querySelector(".weight-chart-hit-area") : null;
+    var tooltip = document.getElementById("weights-chart-tooltip");
+    var shell = document.getElementById("weights-chart-shell");
+
+    if (!hitArea || !tooltip || !shell) return;
+
+    function updateFromPointer(e) {
+      var rect = svg.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      var xRatio = (e.clientX - rect.left) / rect.width;
+      if (!isFinite(xRatio)) return;
+
+      if (xRatio < 0) xRatio = 0;
+      if (xRatio > 1) xRatio = 1;
+
+      var svgX = xRatio * model.width;
+      if (svgX < model.plotLeft) svgX = model.plotLeft;
+      if (svgX > model.plotRight) svgX = model.plotRight;
+
+      var nearestIndex = findNearestChartPoint(model.points, svgX);
+      var shellRect = shell.getBoundingClientRect();
+      setWeightsChartHover(model, svg, tooltip, shellRect, nearestIndex);
+    }
+
+    hitArea.addEventListener("pointerenter", updateFromPointer);
+    hitArea.addEventListener("pointermove", updateFromPointer);
+    hitArea.addEventListener("pointerdown", updateFromPointer);
+    hitArea.addEventListener("pointerleave", function () {
+      clearWeightsChartHover(svg, tooltip);
+    });
+    hitArea.addEventListener("pointercancel", function () {
+      clearWeightsChartHover(svg, tooltip);
+    });
+  }
+
+  function renderWeightsTrendChart(weights) {
+    var container = document.getElementById("weights-weight-chart");
+    if (!container) return;
+
+    bindWeightChartRangeEvents();
+    updateWeightChartRangeButtons();
+
+    var allSeries = getChartReadyWeights(weights);
+    var tooltip = document.getElementById("weights-chart-tooltip");
+    if (tooltip) clearWeightsChartHover(null, tooltip);
+
+    if (allSeries.length === 0) {
+      renderWeightChartEmpty(container, "Log weights to unlock chart history.");
+      return;
+    }
+
+    var filtered = filterWeightSeriesForRange(allSeries, weightChartRange);
+    if (filtered.length === 0) {
+      renderWeightChartEmpty(container, "No entries in " + weightChartRangeLabel(weightChartRange) + ".");
+      return;
+    }
+
+    var width = Math.floor(container.clientWidth || container.getBoundingClientRect().width || 0);
+    var model = buildWeightChartModel(filtered, {
+      width: width,
+      interactive: true,
+      chartId: "weights"
+    });
+
+    container.innerHTML = buildWeightChartSvg(model);
+    var svg = container.querySelector("svg");
+    if (svg) bindWeightsChartHover(model, svg);
+  }
+
+  function refreshWeightCharts() {
+    var weights = getWeights();
+    renderDashboardWeightChart(weights);
+    renderWeightsTrendChart(weights);
+  }
+
+  function queueWeightChartRefresh() {
+    if (chartRefreshFrame !== null) return;
+
+    chartRefreshFrame = requestAnimationFrame(function () {
+      chartRefreshFrame = null;
+      refreshWeightCharts();
+    });
+  }
+
+  function bindWeightChartThemeEvents() {
+    if (chartThemeEventsBound || !window.matchMedia) return;
+    chartThemeEventsBound = true;
+
+    var themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+    var onThemeChange = function () {
+      queueWeightChartRefresh();
+    };
+
+    if (typeof themeMedia.addEventListener === "function") {
+      themeMedia.addEventListener("change", onThemeChange);
+      return;
+    }
+
+    if (typeof themeMedia.addListener === "function") {
+      themeMedia.addListener(onThemeChange);
+    }
+  }
+
   function closeOpenSwipeRow() {
     if (openSwipeRow && typeof openSwipeRow._close === "function") {
       openSwipeRow._close();
@@ -468,16 +1107,63 @@ window.MaxMode = (function () {
     var valueEl = document.getElementById("latest-weight-value");
     if (!valueEl) return;
 
-    var timeEl = document.getElementById("latest-weight-time");
-    var weights = getWeights();
+    bindDashboardInsightsToggle();
 
-    if (weights.length === 0) {
+    var timeEl = document.getElementById("latest-weight-time");
+    var change30dEl = document.getElementById("dashboard-primary-change-30d");
+    var avg30dEl = document.getElementById("dashboard-primary-avg-30d");
+    var change7dEl = document.getElementById("dashboard-detail-change-7d");
+    var entriesEl = document.getElementById("dashboard-detail-entries");
+    var trendNoteEl = document.getElementById("dashboard-trend-note");
+
+    var series = getChartReadyWeights(getWeights());
+    renderDashboardWeightChartFromSeries(series);
+
+    if (series.length === 0) {
       valueEl.textContent = "--";
-      timeEl.textContent = "No entries yet";
-    } else {
-      var latest = weights[0];
-      valueEl.textContent = latest.weight + " " + latest.unit;
-      timeEl.textContent = relativeTime(latest.timestamp) + " · " + formatDate(latest.timestamp);
+      if (timeEl) timeEl.textContent = "No entries yet";
+      if (change30dEl) change30dEl.textContent = "--";
+      if (avg30dEl) avg30dEl.textContent = "--";
+      if (change7dEl) change7dEl.textContent = "--";
+      if (entriesEl) entriesEl.textContent = "0";
+      if (trendNoteEl) trendNoteEl.textContent = "Log weights to view trend.";
+      return;
+    }
+
+    var latest = series[series.length - 1];
+    var latestUnit = latest.unit || "kg";
+    var trend7d = filterWeightSeriesForRange(series, "7d");
+    var trend30d = filterWeightSeriesForRange(series, "30d");
+
+    var change7d = (trend7d.length > 1) ? (latest.weight - trend7d[0].weight) : null;
+    var change30d = (trend30d.length > 1) ? (latest.weight - trend30d[0].weight) : null;
+
+    valueEl.textContent = formatWeightNumber(latest.weight) + " " + latestUnit;
+    if (timeEl) {
+      timeEl.textContent = relativeTimeStrict(latest.iso);
+    }
+    if (change30dEl) {
+      change30dEl.textContent = formatSignedWeightDelta(change30d, latestUnit);
+    }
+    if (avg30dEl) {
+      if (trend30d.length === 0) {
+        avg30dEl.textContent = "--";
+      } else {
+        var total30d = 0;
+        for (var i = 0; i < trend30d.length; i++) {
+          total30d += trend30d[i].weight;
+        }
+        avg30dEl.textContent = formatWeightNumber(total30d / trend30d.length) + " " + latestUnit;
+      }
+    }
+    if (change7dEl) {
+      change7dEl.textContent = formatSignedWeightDelta(change7d, latestUnit);
+    }
+    if (entriesEl) {
+      entriesEl.textContent = String(series.length);
+    }
+    if (trendNoteEl) {
+      trendNoteEl.textContent = buildDashboardTrendNote(change30d, latestUnit);
     }
   }
 
@@ -517,20 +1203,149 @@ window.MaxMode = (function () {
       + "</article>";
   }
 
-  function renderDesktopWeights(weights, tbody) {
-    var rows = new Array(weights.length);
-    for (var i = 0; i < weights.length; i++) {
-      rows[i] = desktopWeightRowHtml(weights[i]);
+  function buildWeightLogGroups(weights) {
+    var source = Array.isArray(weights) ? weights : getWeights();
+    var sorted = [];
+
+    for (var i = 0; i < source.length; i++) {
+      var entry = source[i];
+      if (!entry || typeof entry !== "object") continue;
+
+      var parsedWeight = (typeof entry.weight === "number") ? entry.weight : parseFloat(entry.weight);
+      var timestampMs = new Date(entry.timestamp).getTime();
+
+      if (!isFinite(parsedWeight) || parsedWeight <= 0) continue;
+      if (!isFinite(timestampMs)) continue;
+
+      sorted.push({
+        id: entry.id,
+        weight: parsedWeight,
+        unit: entry.unit || "kg",
+        timestamp: entry.timestamp,
+        timestampMs: timestampMs
+      });
     }
-    tbody.innerHTML = rows.join("");
+
+    sorted.sort(function (a, b) {
+      return b.timestampMs - a.timestampMs;
+    });
+
+    var startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    var msDay = 24 * 60 * 60 * 1000;
+    var todayStartMs = startOfToday.getTime();
+    var last7StartMs = todayStartMs - (7 * msDay);
+    var last30StartMs = todayStartMs - (30 * msDay);
+
+    var groups = [
+      { key: "today", title: "Today", entries: [] },
+      { key: "last-7-days", title: "Last 7 Days", entries: [] },
+      { key: "last-30-days", title: "Last 30 Days", entries: [] },
+      { key: "older", title: "Older", entries: [] }
+    ];
+
+    for (var j = 0; j < sorted.length; j++) {
+      var item = sorted[j];
+      if (item.timestampMs >= todayStartMs) {
+        groups[0].entries.push(item);
+      } else if (item.timestampMs >= last7StartMs) {
+        groups[1].entries.push(item);
+      } else if (item.timestampMs >= last30StartMs) {
+        groups[2].entries.push(item);
+      } else {
+        groups[3].entries.push(item);
+      }
+    }
+
+    return groups;
   }
 
-  function renderMobileWeights(weights, list) {
-    var rows = new Array(weights.length);
-    for (var i = 0; i < weights.length; i++) {
-      rows[i] = mobileWeightRowHtml(weights[i]);
+  function weightLogHasEntries(groups) {
+    if (!Array.isArray(groups)) return false;
+
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i].entries && groups[i].entries.length > 0) {
+        return true;
+      }
     }
-    list.innerHTML = rows.join("");
+
+    return false;
+  }
+
+  function formatEntryCount(count) {
+    if (count === 1) return "1 entry";
+    return count + " entries";
+  }
+
+  function desktopWeightGroupHtml(group) {
+    var rows = new Array(group.entries.length);
+    for (var i = 0; i < group.entries.length; i++) {
+      rows[i] = desktopWeightRowHtml(group.entries[i]);
+    }
+
+    return '<section class="weight-log-group" data-weight-log-group="' + escapeHtml(group.key) + '">'
+      + '<div class="weight-log-group-header">'
+      + '<p class="apple-overline weight-log-group-title">' + escapeHtml(group.title) + "</p>"
+      + '<p class="apple-caption weight-log-group-count">' + escapeHtml(formatEntryCount(group.entries.length)) + "</p>"
+      + "</div>"
+      + '<div class="apple-card apple-table-card">'
+      + '<table class="apple-table">'
+      + '<thead>'
+      + '<tr class="apple-table-head-row">'
+      + '<th class="apple-table-head-cell">Date</th>'
+      + '<th class="apple-table-head-cell">Time</th>'
+      + '<th class="apple-table-head-cell apple-table-head-cell-right">Weight</th>'
+      + '<th class="apple-table-head-cell apple-table-head-cell-right">Actions</th>'
+      + "</tr>"
+      + "</thead>"
+      + '<tbody class="apple-table-body">'
+      + rows.join("")
+      + "</tbody>"
+      + "</table>"
+      + "</div>"
+      + "</section>";
+  }
+
+  function mobileWeightGroupHtml(group) {
+    var rows = new Array(group.entries.length);
+    for (var i = 0; i < group.entries.length; i++) {
+      rows[i] = mobileWeightRowHtml(group.entries[i]);
+    }
+
+    return '<section class="weight-log-group" data-weight-log-group="' + escapeHtml(group.key) + '">'
+      + '<div class="weight-log-group-header">'
+      + '<p class="apple-overline weight-log-group-title">' + escapeHtml(group.title) + "</p>"
+      + '<p class="apple-caption weight-log-group-count">' + escapeHtml(formatEntryCount(group.entries.length)) + "</p>"
+      + "</div>"
+      + '<div class="weight-mobile-list">'
+      + rows.join("")
+      + "</div>"
+      + "</section>";
+  }
+
+  function renderDesktopWeightGroups(groups, container) {
+    if (!container) return;
+
+    var markup = [];
+    for (var i = 0; i < groups.length; i++) {
+      if (!groups[i].entries || groups[i].entries.length === 0) continue;
+      markup.push(desktopWeightGroupHtml(groups[i]));
+    }
+
+    container.innerHTML = markup.join("");
+  }
+
+  function renderMobileWeightGroups(groups, container) {
+    if (!container) return;
+
+    var markup = [];
+    for (var i = 0; i < groups.length; i++) {
+      if (!groups[i].entries || groups[i].entries.length === 0) continue;
+      markup.push(mobileWeightGroupHtml(groups[i]));
+    }
+
+    container.innerHTML = markup.join("");
   }
 
   function initWeightSwipeRow(row) {
@@ -810,27 +1625,29 @@ window.MaxMode = (function () {
   }
 
   function populateWeights() {
-    var tbody = document.getElementById("weight-table-body");
-    var mobileList = document.getElementById("weight-mobile-list");
-    if (!tbody || !mobileList) {
+    var desktopGroups = document.getElementById("weight-desktop-groups");
+    var mobileGroups = document.getElementById("weight-mobile-groups");
+    if (!desktopGroups || !mobileGroups) {
       lastWeightUiMode = null;
       return;
     }
 
     var weights = getWeights();
+    var groups = buildWeightLogGroups(weights);
     var emptyState = document.getElementById("weight-empty-state");
-    var tableContainer = document.getElementById("weight-table-container");
-    var mobileContainer = document.getElementById("weight-mobile-list-container");
+    var desktopContainer = document.getElementById("weight-desktop-groups-container");
+    var mobileContainer = document.getElementById("weight-mobile-groups-container");
+    renderWeightsTrendChart(weights);
 
     closeDesktopMenu();
     closeOpenSwipeRow();
 
-    if (weights.length === 0) {
+    if (!weightLogHasEntries(groups)) {
       if (emptyState) emptyState.classList.remove("hidden");
-      if (tableContainer) tableContainer.classList.add("hidden");
+      if (desktopContainer) desktopContainer.classList.add("hidden");
       if (mobileContainer) mobileContainer.classList.add("hidden");
-      tbody.innerHTML = "";
-      mobileList.innerHTML = "";
+      desktopGroups.innerHTML = "";
+      mobileGroups.innerHTML = "";
       closeDeleteSheet();
       return;
     }
@@ -842,13 +1659,13 @@ window.MaxMode = (function () {
 
     if (useMobileUi) {
       if (mobileContainer) mobileContainer.classList.remove("hidden");
-      if (tableContainer) tableContainer.classList.add("hidden");
-      renderMobileWeights(weights, mobileList);
-      initWeightSwipeRows(mobileList);
+      if (desktopContainer) desktopContainer.classList.add("hidden");
+      renderMobileWeightGroups(groups, mobileGroups);
+      initWeightSwipeRows(mobileGroups);
     } else {
-      if (tableContainer) tableContainer.classList.remove("hidden");
+      if (desktopContainer) desktopContainer.classList.remove("hidden");
       if (mobileContainer) mobileContainer.classList.add("hidden");
-      renderDesktopWeights(weights, tbody);
+      renderDesktopWeightGroups(groups, desktopGroups);
     }
   }
 
@@ -1087,18 +1904,24 @@ window.MaxMode = (function () {
     resizeFrame = requestAnimationFrame(function () {
       resizeFrame = null;
 
-      var tbody = document.getElementById("weight-table-body");
-      var mobileList = document.getElementById("weight-mobile-list");
-      if (!tbody || !mobileList) return;
+      var desktopGroups = document.getElementById("weight-desktop-groups");
+      var mobileGroups = document.getElementById("weight-mobile-groups");
+      if (!desktopGroups || !mobileGroups) {
+        queueWeightChartRefresh();
+        return;
+      }
 
       var useMobileUi = isMobileWeightUI();
       if (lastWeightUiMode === null) {
         lastWeightUiMode = useMobileUi;
+        queueWeightChartRefresh();
         return;
       }
 
       if (useMobileUi !== lastWeightUiMode) {
         populateWeights();
+      } else {
+        queueWeightChartRefresh();
       }
     });
   }
@@ -1106,6 +1929,7 @@ window.MaxMode = (function () {
   function bindGlobalEvents() {
     if (globalEventsBound) return;
     globalEventsBound = true;
+    bindWeightChartThemeEvents();
 
     document.addEventListener("click", function (e) {
       var target = e.target;
