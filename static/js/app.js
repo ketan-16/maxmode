@@ -1688,6 +1688,7 @@ window.MaxMode = (function () {
     if (isEdit) {
       editingWeightId = entry.id;
       input.value = entry.weight;
+      var shouldSelectOnFocus = !isMobileWeightUI();
       setWeightModalMode(true);
       modal.classList.remove("hidden");
       modal.classList.remove("is-closing");
@@ -1695,7 +1696,7 @@ window.MaxMode = (function () {
       requestAnimationFrame(function () {
         modal.classList.add("is-open");
       });
-      focusWeightInput(input, true);
+      focusWeightInput(input, shouldSelectOnFocus);
       return;
     }
 

@@ -325,6 +325,9 @@ body.app-body {
   font-family: var(--font-system);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .app-body.modal-scroll-locked {
@@ -349,6 +352,17 @@ input {
 textarea,
 select {
   font-family: var(--font-system);
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+[contenteditable=""],
+[contenteditable]:not([contenteditable="false"]) {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .hidden {

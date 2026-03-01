@@ -40,8 +40,10 @@
       <form class="apple-form" onsubmit="MaxMode.handleWeightSubmit(event)">
         <label for="weight-input" class="apple-field-label">Weight (kg)</label>
         <input type="number" id="weight-input" step="0.1" min="0.1" max="999"
+               inputmode="decimal" enterkeyhint="done"
+               autocomplete="off" autocorrect="off" autocapitalize="off"
                class="apple-input apple-input-metric"
-               placeholder="0.0" required autofocus>
+               placeholder="0.0" required>
         <button type="submit"
                 class="apple-btn apple-btn-primary apple-btn-block">
           <span id="weight-submit-label">Save</span>
