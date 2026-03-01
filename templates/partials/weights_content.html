@@ -11,8 +11,8 @@
   </div>
 
   <!-- Weight Modal -->
-  <div id="weight-modal" class="hidden app-overlay app-overlay-weight">
-    <div class="apple-modal apple-modal-weight">
+  <div id="weight-modal" class="hidden app-overlay app-overlay-weight" aria-hidden="true">
+    <div class="apple-modal apple-modal-weight" role="dialog" aria-modal="true" aria-labelledby="weight-modal-title">
       <div class="apple-modal-header">
         <h2 id="weight-modal-title" class="apple-subtitle apple-subtitle-no-margin">Log Weight</h2>
         <button type="button" onclick="MaxMode.closeWeightModal()" class="apple-icon-btn">

@@ -1,11 +1,45 @@
 :root {
-  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", sans-serif;
-  --page-transition-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --font-ios-fallback: "PingFang SC", "Hiragino Sans GB", "Hiragino Sans", "Yu Gothic UI", "Noto Sans CJK SC", "Noto Sans CJK JP", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --font-ios-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", var(--font-ios-fallback);
+  --font-ios-display: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", var(--font-ios-fallback);
+  --font-macos-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", var(--font-ios-fallback);
+  --font-macos-display: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", var(--font-ios-fallback);
+  --font-system: var(--font-macos-text);
+  --font-display: var(--font-macos-display);
+
+  --motion-duration-instant: 1ms;
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-slow: 240ms;
+  --motion-duration-modal: 260ms;
+  --motion-duration-sheet: 260ms;
+  --motion-duration-snap: 280ms;
+  --motion-duration-page-out: 90ms;
+  --motion-duration-page-in: 150ms;
+  --motion-distance-page-out: 4px;
+  --motion-distance-page-in: 6px;
+  --motion-distance-modal: 12px;
+  --motion-distance-sheet: 14px;
+  --motion-scale-enter: 0.988;
+  --motion-scale-exit: 0.994;
+  --motion-ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --page-transition-ease: var(--motion-ease-standard);
   color-scheme: light dark;
 }
 
 html:not([data-ui-platform]),
 html[data-ui-platform="ios"] {
+  --font-system: var(--font-ios-text);
+  --font-display: var(--font-ios-display);
+  --motion-duration-base: 190ms;
+  --motion-duration-modal: 280ms;
+  --motion-duration-sheet: 280ms;
+  --motion-duration-snap: 300ms;
+  --motion-duration-page-in: 160ms;
+  --motion-distance-modal: 14px;
+  --motion-distance-sheet: 16px;
   --apple-bg: #f2f2f7;
   --apple-surface: #ffffff;
   --apple-surface-elevated: #f2f2f7;
@@ -117,6 +151,16 @@ html[data-ui-platform="ios"] {
 }
 
 html[data-ui-platform="macos"] {
+  --font-system: var(--font-macos-text);
+  --font-display: var(--font-macos-display);
+  --motion-duration-base: 170ms;
+  --motion-duration-modal: 230ms;
+  --motion-duration-sheet: 240ms;
+  --motion-duration-snap: 260ms;
+  --motion-duration-page-out: 80ms;
+  --motion-duration-page-in: 140ms;
+  --motion-distance-modal: 10px;
+  --motion-distance-sheet: 12px;
   --apple-bg: #f6f6f7;
   --apple-surface: #ffffff;
   --apple-surface-elevated: #f5f5f7;
@@ -263,6 +307,12 @@ a {
 button,
 input {
   font: inherit;
+  font-family: var(--font-system);
+}
+
+textarea,
+select {
+  font-family: var(--font-system);
 }
 
 .hidden {
@@ -273,13 +323,13 @@ input {
 html.no-view-transition #main-content {
   transform-origin: top center;
   transition:
-    opacity 40ms var(--page-transition-ease),
-    transform 40ms var(--page-transition-ease);
+    opacity var(--motion-duration-page-out) var(--motion-ease-standard),
+    transform var(--motion-duration-page-out) var(--motion-ease-standard);
 }
 
 html.no-view-transition .htmx-swapping {
   opacity: 0;
-  transform: translateY(5px) scale(0.996);
+  transform: translateY(var(--motion-distance-page-out)) scale(var(--motion-scale-exit));
 }
 
 html.no-view-transition .htmx-settling {
@@ -294,11 +344,11 @@ html.no-view-transition .htmx-settling {
 
   @media (prefers-reduced-motion: no-preference) {
     ::view-transition-old(page-content) {
-      animation: page-content-out 70ms var(--page-transition-ease) both;
+      animation: page-content-out var(--motion-duration-page-out) var(--motion-ease-standard) both;
     }
 
     ::view-transition-new(page-content) {
-      animation: page-content-in 130ms var(--page-transition-ease) both;
+      animation: page-content-in var(--motion-duration-page-in) var(--motion-ease-standard) both;
     }
   }
 }
@@ -311,14 +361,14 @@ html.no-view-transition .htmx-settling {
 
   to {
     opacity: 0;
-    transform: translateY(5px) scale(0.994);
+    transform: translateY(var(--motion-distance-page-out)) scale(var(--motion-scale-exit));
   }
 }
 
 @keyframes page-content-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.992);
+    transform: translateY(var(--motion-distance-page-in)) scale(var(--motion-scale-enter));
   }
 
   to {
@@ -348,6 +398,7 @@ html.no-view-transition .htmx-settling {
 }
 
 .app-logo {
+  font-family: var(--font-display);
   font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -365,7 +416,7 @@ html.no-view-transition .htmx-settling {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--apple-secondary-label);
-  transition: color 140ms ease;
+  transition: color var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .app-nav-link:hover,
@@ -417,6 +468,7 @@ html.no-view-transition .htmx-settling {
 
 .apple-title {
   margin: 0 0 1.5rem;
+  font-family: var(--font-display);
   font-size: clamp(1.5rem, 2.2vw, 1.82rem);
   line-height: 1.18;
   font-weight: 700;
@@ -434,6 +486,7 @@ html.no-view-transition .htmx-settling {
 
 .apple-subtitle {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 1.2rem;
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -460,6 +513,7 @@ html.no-view-transition .htmx-settling {
 
 .apple-overline {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 0.72rem;
   line-height: 1.3;
   text-transform: uppercase;
@@ -470,10 +524,12 @@ html.no-view-transition .htmx-settling {
 
 .apple-metric {
   margin: 0.45rem 0 0;
+  font-family: var(--font-display);
   font-size: clamp(2.4rem, 6vw, 3rem);
   line-height: 1.05;
   letter-spacing: -0.04em;
   font-weight: 750;
+  font-variant-numeric: tabular-nums;
 }
 
 .apple-card {
@@ -523,9 +579,26 @@ html.no-view-transition .htmx-settling {
 }
 
 .app-overlay-weight {
-  background: var(--apple-overlay-weight);
+  /* Match delete sheet scrim so all weight-related modals share one backdrop style. */
+  background: var(--weight-backdrop);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+#weight-modal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#weight-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#weight-modal.is-closing {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .apple-modal {
@@ -544,6 +617,21 @@ html.no-view-transition .htmx-settling {
 
 .apple-modal-weight {
   width: min(24rem, calc(100% - 2rem));
+  transform: translateY(var(--motion-distance-modal)) scale(var(--motion-scale-enter));
+  opacity: 0;
+  transition:
+    transform var(--motion-duration-modal) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#weight-modal.is-open .apple-modal-weight {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+#weight-modal.is-closing .apple-modal-weight {
+  transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
+  opacity: 0;
 }
 
 .apple-form {
@@ -578,7 +666,10 @@ html.no-view-transition .htmx-settling {
   padding: 0.72rem 0.9rem;
   font-size: 1rem;
   line-height: 1.3;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .apple-input::placeholder {
@@ -613,11 +704,16 @@ html.no-view-transition .htmx-settling {
   letter-spacing: -0.01em;
   line-height: 1.2;
   cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    background-color var(--motion-duration-base) var(--motion-ease-standard),
+    color var(--motion-duration-base) var(--motion-ease-standard),
+    border-color var(--motion-duration-base) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .apple-btn:active {
-  transform: scale(0.99);
+  transform: scale(0.992);
 }
 
 .apple-btn:focus-visible,
@@ -710,7 +806,9 @@ html.no-view-transition .htmx-settling {
   justify-content: center;
   background: transparent;
   color: var(--apple-secondary-label);
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
   cursor: pointer;
 }
 
@@ -774,6 +872,7 @@ html.no-view-transition .htmx-settling {
 }
 
 .apple-table-head-cell {
+  font-family: var(--font-display);
   padding: 0.78rem 1rem;
   text-align: left;
   font-size: 0.72rem;
@@ -799,6 +898,7 @@ html.no-view-transition .htmx-settling {
   padding: 0.78rem 1rem;
   font-size: 0.92rem;
   color: var(--apple-label);
+  font-variant-numeric: tabular-nums;
 }
 
 .apple-table-cell-muted {
@@ -851,6 +951,7 @@ html.no-view-transition .htmx-settling {
 .profile-stat-value {
   font-size: 0.95rem;
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Weight interactions */
@@ -888,7 +989,7 @@ html.no-view-transition .htmx-settling {
   border: 1px solid var(--weight-border);
   border-radius: calc(var(--apple-radius-card) - 2px);
   transform: translate3d(0, 0, 0);
-  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--motion-duration-snap) var(--motion-ease-emphasized);
   touch-action: pan-y;
 }
 
@@ -904,10 +1005,12 @@ html.no-view-transition .htmx-settling {
 
 .weight-row-weight {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 630;
   color: var(--weight-label);
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .weight-row-meta {
@@ -925,6 +1028,7 @@ html.no-view-transition .htmx-settling {
   font-weight: 450;
   flex-shrink: 0;
   letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .weight-pill-actions {
@@ -937,7 +1041,7 @@ html.no-view-transition .htmx-settling {
   gap: 10px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
   z-index: 1;
 }
 
@@ -956,11 +1060,11 @@ html.no-view-transition .htmx-settling {
   justify-content: center;
   color: var(--weight-pill-delete-foreground);
   box-shadow: var(--weight-pill-shadow);
-  transform: scale(0.72) translateX(18px);
+  transform: scale(0.82) translateX(12px);
   opacity: 0;
   transition:
-    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease;
+    transform var(--motion-duration-snap) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .weight-pill-btn svg {
@@ -1007,7 +1111,10 @@ html.no-view-transition .htmx-settling {
   justify-content: center;
   color: var(--weight-label-secondary);
   background: transparent;
-  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .weight-kebab-trigger:hover,
@@ -1038,12 +1145,12 @@ html.no-view-transition .htmx-settling {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(-6px) scale(0.98);
+  transform: translateY(calc(-1 * var(--motion-distance-page-out))) scale(var(--motion-scale-enter));
   transform-origin: top right;
   transition:
-    opacity 130ms ease,
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    visibility 0s linear 180ms;
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized),
+    visibility 0s linear var(--motion-duration-base);
   z-index: 20;
 }
 
@@ -1053,8 +1160,8 @@ html.no-view-transition .htmx-settling {
   pointer-events: auto;
   transform: translateY(0) scale(1);
   transition:
-    opacity 130ms ease,
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized),
     visibility 0s linear 0s;
 }
 
@@ -1068,7 +1175,7 @@ html.no-view-transition .htmx-settling {
   font-weight: 550;
   color: var(--weight-label);
   background: transparent;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .weight-kebab-item:hover,
@@ -1089,6 +1196,12 @@ html.no-view-transition .htmx-settling {
   align-items: flex-end;
   justify-content: center;
   padding: 16px;
+  pointer-events: none;
+}
+
+.weight-delete-sheet.is-open,
+.weight-delete-sheet.is-closing {
+  pointer-events: auto;
 }
 
 @media (min-width: 768px) {
@@ -1111,7 +1224,7 @@ html.no-view-transition .htmx-settling {
   inset: 0;
   background: var(--weight-backdrop);
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .weight-delete-sheet-panel {
@@ -1122,11 +1235,11 @@ html.no-view-transition .htmx-settling {
   background: var(--weight-surface-solid);
   box-shadow: var(--weight-menu-shadow);
   padding: 18px;
-  transform: translateY(16px) scale(0.98);
+  transform: translateY(var(--motion-distance-sheet)) scale(var(--motion-scale-enter));
   opacity: 0;
   transition:
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease;
+    transform var(--motion-duration-sheet) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .weight-delete-sheet.is-open .weight-delete-sheet-backdrop {
@@ -1138,13 +1251,24 @@ html.no-view-transition .htmx-settling {
   transform: translateY(0) scale(1);
 }
 
+.weight-delete-sheet.is-closing .weight-delete-sheet-backdrop {
+  opacity: 0;
+}
+
+.weight-delete-sheet.is-closing .weight-delete-sheet-panel {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-sheet)) scale(var(--motion-scale-enter));
+}
+
 .weight-sheet-btn {
   width: 100%;
-  transition: transform 120ms ease, filter 120ms ease;
+  transition:
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    filter var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .weight-sheet-btn:active {
-  transform: scale(0.99);
+  transform: scale(0.992);
 }
 
 .weight-sheet-btn-danger {
@@ -1204,12 +1328,31 @@ html.no-view-transition .htmx-settling {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #main-content,
-  .htmx-swapping,
-  .htmx-settling,
+  :root,
+  html:not([data-ui-platform]),
+  html[data-ui-platform="ios"],
+  html[data-ui-platform="macos"] {
+    --motion-duration-fast: var(--motion-duration-instant);
+    --motion-duration-base: var(--motion-duration-instant);
+    --motion-duration-slow: var(--motion-duration-instant);
+    --motion-duration-modal: var(--motion-duration-instant);
+    --motion-duration-sheet: var(--motion-duration-instant);
+    --motion-duration-snap: var(--motion-duration-instant);
+    --motion-duration-page-out: var(--motion-duration-instant);
+    --motion-duration-page-in: var(--motion-duration-instant);
+    --motion-distance-page-out: 0px;
+    --motion-distance-page-in: 0px;
+    --motion-distance-modal: 0px;
+    --motion-distance-sheet: 0px;
+    --motion-scale-enter: 1;
+    --motion-scale-exit: 1;
+  }
+
   ::view-transition-old(page-content),
   ::view-transition-new(page-content),
-  .weight-row-content,
+  #main-content,
+  #weight-modal,
+  #weight-modal .apple-modal-weight,
   .weight-pill-actions,
   .weight-pill-btn,
   .weight-kebab-menu,
@@ -1220,7 +1363,7 @@ html.no-view-transition .htmx-settling {
   .apple-icon-btn,
   .app-nav-link {
     animation: none !important;
-    transition: none !important;
-    transform: none !important;
+    transition-duration: var(--motion-duration-instant) !important;
+    animation-duration: var(--motion-duration-instant) !important;
   }
 }

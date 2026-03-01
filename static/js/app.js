@@ -29,6 +29,8 @@ window.MaxMode = (function () {
   var weightModalScrollLocked = false;
   var weightModalUnlockTimer = null;
   var weightModalViewportCleanup = null;
+  var weightModalTransitionCleanup = null;
+  var deleteSheetTransitionCleanup = null;
 
   // ── Storage Helpers ───────────────────────────────────────────────
   function getUser() {
@@ -179,6 +181,97 @@ window.MaxMode = (function () {
       return window.CSS.escape(value);
     }
     return String(value).replace(/([\\"'])/g, "\\$1");
+  }
+
+  function parseCssTimeMs(rawValue) {
+    if (!rawValue) return 0;
+
+    var value = String(rawValue).trim();
+    if (!value) return 0;
+
+    if (value.slice(-2) === "ms") {
+      var millis = parseFloat(value.slice(0, -2));
+      return isFinite(millis) ? millis : 0;
+    }
+
+    if (value.slice(-1) === "s") {
+      var seconds = parseFloat(value.slice(0, -1));
+      return isFinite(seconds) ? seconds * 1000 : 0;
+    }
+
+    return 0;
+  }
+
+  function getMaxTransitionMs(element) {
+    if (!element) return 0;
+
+    var style = window.getComputedStyle(element);
+    var durations = String(style.transitionDuration || "").split(",");
+    var delays = String(style.transitionDelay || "").split(",");
+    var total = Math.max(durations.length, delays.length);
+    var maxMs = 0;
+
+    for (var i = 0; i < total; i++) {
+      var duration = parseCssTimeMs(durations[i % durations.length]);
+      var delay = parseCssTimeMs(delays[i % delays.length]);
+      if ((duration + delay) > maxMs) {
+        maxMs = duration + delay;
+      }
+    }
+
+    return maxMs;
+  }
+
+  function onTransitionEndOrTimeout(element, fallbackMs, callback) {
+    if (!element || typeof callback !== "function") {
+      return function () {};
+    }
+
+    var done = false;
+    var timer = null;
+
+    function finish() {
+      if (done) return;
+      done = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      element.removeEventListener("transitionend", onEnd);
+      callback();
+    }
+
+    function onEnd(e) {
+      if (e.target !== element) return;
+      finish();
+    }
+
+    element.addEventListener("transitionend", onEnd);
+    timer = window.setTimeout(finish, Math.max(24, Math.ceil(fallbackMs)));
+
+    return function cleanup() {
+      if (done) return;
+      done = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      element.removeEventListener("transitionend", onEnd);
+    };
+  }
+
+  function clearWeightModalTransitionWatcher() {
+    if (typeof weightModalTransitionCleanup === "function") {
+      var cleanup = weightModalTransitionCleanup;
+      weightModalTransitionCleanup = null;
+      cleanup();
+    }
+  }
+
+  function clearDeleteSheetTransitionWatcher() {
+    if (typeof deleteSheetTransitionCleanup === "function") {
+      var cleanup = deleteSheetTransitionCleanup;
+      deleteSheetTransitionCleanup = null;
+      cleanup();
+    }
   }
 
   function isMobileWeightUI() {
@@ -462,6 +555,10 @@ window.MaxMode = (function () {
     var velocityX = 0;
     var dragging = false;
     var locked = false;
+    var queuedX = 0;
+    var translateFrame = null;
+    var willChangeTimer = null;
+    var actionsHideTimer = null;
 
     function measureOpenPx() {
       if (!buttons.length) return 0;
@@ -490,11 +587,40 @@ window.MaxMode = (function () {
     }
 
     function clearWillChangeSoon() {
-      window.setTimeout(function () {
+      if (willChangeTimer !== null) {
+        window.clearTimeout(willChangeTimer);
+      }
+
+      var delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
+      willChangeTimer = window.setTimeout(function () {
+        willChangeTimer = null;
         if (!dragging) {
           content.style.willChange = "";
         }
-      }, 340);
+      }, delay);
+    }
+
+    function clearActionsHideSoon() {
+      if (actionsHideTimer !== null) {
+        window.clearTimeout(actionsHideTimer);
+        actionsHideTimer = null;
+      }
+    }
+
+    function cancelTranslateFrame() {
+      if (translateFrame !== null) {
+        window.cancelAnimationFrame(translateFrame);
+        translateFrame = null;
+      }
+    }
+
+    function toggleDeleteExpansion(x) {
+      if (!deleteButton) return;
+      if (x < -(window.innerWidth * SWIPE_CONFIG.FULL_FRAC)) {
+        deleteButton.classList.add("expanding");
+      } else {
+        deleteButton.classList.remove("expanding");
+      }
     }
 
     function toggleButtons(progress) {
@@ -509,7 +635,7 @@ window.MaxMode = (function () {
 
     function applyTranslate(x, animate) {
       content.style.transition = animate
-        ? "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)"
+        ? "transform var(--motion-duration-snap) var(--motion-ease-emphasized)"
         : "none";
       content.style.transform = "translate3d(" + x + "px, 0, 0)";
 
@@ -522,20 +648,48 @@ window.MaxMode = (function () {
       }
     }
 
+    function scheduleTranslate(x) {
+      queuedX = x;
+      if (translateFrame !== null) return;
+
+      translateFrame = requestAnimationFrame(function () {
+        translateFrame = null;
+        applyTranslate(queuedX, false);
+        toggleDeleteExpansion(queuedX);
+      });
+    }
+
+    function flushTranslateFrame() {
+      if (translateFrame === null) return;
+      window.cancelAnimationFrame(translateFrame);
+      translateFrame = null;
+      applyTranslate(queuedX, false);
+      toggleDeleteExpansion(queuedX);
+    }
+
     function snapTo(x) {
+      cancelTranslateFrame();
+      clearActionsHideSoon();
       curX = x;
+      queuedX = x;
       applyTranslate(x, true);
+      toggleDeleteExpansion(x);
+
       if (x < 0) {
         row.classList.add("is-open");
       } else {
         row.classList.remove("is-open");
       }
+
       if (x === 0) {
-        window.setTimeout(function () {
+        var delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
+        actionsHideTimer = window.setTimeout(function () {
+          actionsHideTimer = null;
           actions.classList.remove("visible");
           toggleButtons(0);
-        }, 220);
+        }, delay);
       }
+
       clearWillChangeSoon();
     }
 
@@ -559,6 +713,12 @@ window.MaxMode = (function () {
       velocityX = 0;
       dragging = true;
       locked = false;
+      cancelTranslateFrame();
+      clearActionsHideSoon();
+      if (willChangeTimer !== null) {
+        window.clearTimeout(willChangeTimer);
+        willChangeTimer = null;
+      }
       content.style.willChange = "transform";
       content.style.transition = "none";
     }
@@ -601,20 +761,14 @@ window.MaxMode = (function () {
       }
 
       curX = raw;
-      applyTranslate(raw, false);
-
-      if (deleteButton) {
-        if (raw < -(window.innerWidth * SWIPE_CONFIG.FULL_FRAC)) {
-          deleteButton.classList.add("expanding");
-        } else {
-          deleteButton.classList.remove("expanding");
-        }
-      }
+      scheduleTranslate(raw);
     }
 
     function onEnd() {
       if (!dragging) return;
       dragging = false;
+
+      flushTranslateFrame();
 
       if (deleteButton) deleteButton.classList.remove("expanding");
 
@@ -712,12 +866,18 @@ window.MaxMode = (function () {
     }
 
     lockWeightModalScroll();
+    clearWeightModalTransitionWatcher();
 
     if (isEdit) {
       editingWeightId = entry.id;
       input.value = entry.weight;
       setWeightModalMode(true);
       modal.classList.remove("hidden");
+      modal.classList.remove("is-closing");
+      modal.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () {
+        modal.classList.add("is-open");
+      });
       focusWeightInput(input, true);
       return;
     }
@@ -725,6 +885,11 @@ window.MaxMode = (function () {
     editingWeightId = null;
     setWeightModalMode(false);
     modal.classList.remove("hidden");
+    modal.classList.remove("is-closing");
+    modal.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(function () {
+      modal.classList.add("is-open");
+    });
     input.value = "";
     focusWeightInput(input, false);
   }
@@ -742,7 +907,27 @@ window.MaxMode = (function () {
       active.blur();
     }
 
-    if (modal) modal.classList.add("hidden");
+    clearWeightModalTransitionWatcher();
+    if (modal && !modal.classList.contains("hidden")) {
+      modal.classList.remove("is-open");
+      modal.classList.add("is-closing");
+      modal.setAttribute("aria-hidden", "true");
+
+      var modalPanel = modal.querySelector(".apple-modal-weight") || modal;
+      var closeMs = Math.max(getMaxTransitionMs(modal), getMaxTransitionMs(modalPanel)) + 48;
+
+      weightModalTransitionCleanup = onTransitionEndOrTimeout(modalPanel, closeMs, function () {
+        weightModalTransitionCleanup = null;
+        if (modal.classList.contains("is-open")) return;
+        modal.classList.remove("is-closing");
+        modal.classList.add("hidden");
+      });
+    } else if (modal) {
+      modal.classList.remove("is-open");
+      modal.classList.remove("is-closing");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
     if (input) input.value = "";
 
     editingWeightId = null;
@@ -767,8 +952,10 @@ window.MaxMode = (function () {
     pendingDeleteWeightId = weightId;
     closeDesktopMenu();
     closeOpenSwipeRow();
+    clearDeleteSheetTransitionWatcher();
 
     sheet.classList.remove("hidden");
+    sheet.classList.remove("is-closing");
     sheet.setAttribute("aria-hidden", "false");
 
     requestAnimationFrame(function () {
@@ -785,16 +972,28 @@ window.MaxMode = (function () {
       pendingDeleteWeightId = null;
     }
 
-    if (!sheet || sheet.classList.contains("hidden")) return;
+    clearDeleteSheetTransitionWatcher();
+    if (!sheet) return;
+    if (sheet.classList.contains("hidden")) {
+      sheet.classList.remove("is-closing");
+      sheet.setAttribute("aria-hidden", "true");
+      return;
+    }
 
     sheet.classList.remove("is-open");
+    sheet.classList.add("is-closing");
     sheet.setAttribute("aria-hidden", "true");
 
-    window.setTimeout(function () {
-      if (!sheet.classList.contains("is-open")) {
-        sheet.classList.add("hidden");
-      }
-    }, 220);
+    var panel = sheet.querySelector(".weight-delete-sheet-panel") || sheet;
+    var backdrop = sheet.querySelector(".weight-delete-sheet-backdrop");
+    var closeMs = Math.max(getMaxTransitionMs(panel), getMaxTransitionMs(backdrop), getMaxTransitionMs(sheet)) + 48;
+
+    deleteSheetTransitionCleanup = onTransitionEndOrTimeout(panel, closeMs, function () {
+      deleteSheetTransitionCleanup = null;
+      if (sheet.classList.contains("is-open")) return;
+      sheet.classList.remove("is-closing");
+      sheet.classList.add("hidden");
+    });
   }
 
   function confirmDeleteWeight() {
@@ -967,6 +1166,12 @@ window.MaxMode = (function () {
 
   // ── Master Page Load ──────────────────────────────────────────────
   function onPageLoad() {
+    clearWeightModalTransitionWatcher();
+    clearDeleteSheetTransitionWatcher();
+    editingWeightId = null;
+    pendingDeleteWeightId = null;
+    closeDesktopMenu();
+    closeOpenSwipeRow();
     unlockWeightModalScrollNow();
     bindGlobalEvents();
     checkOnboarding();
