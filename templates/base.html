@@ -16,32 +16,8 @@
   <link rel="shortcut icon" href="/static/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
-  <script>
-    (function () {
-      var root = document.documentElement;
-
-      function setUiPlatform() {
-        var compact = window.matchMedia("(max-width: 1024px)").matches;
-        var noHover = window.matchMedia("(hover: none)").matches;
-        var coarsePointer = window.matchMedia("(pointer: coarse)").matches;
-        root.setAttribute("data-ui-platform", (compact || noHover || coarsePointer) ? "ios" : "macos");
-      }
-
-      setUiPlatform();
-      window.addEventListener("resize", setUiPlatform, { passive: true });
-    })();
-  </script>
-
-  <!-- HTMX -->
-  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-  <script>
-    var hasViewTransition = typeof document.startViewTransition === "function";
-    document.documentElement.classList.add(hasViewTransition ? "has-view-transition" : "no-view-transition");
-
-    if (window.htmx) {
-      htmx.config.globalViewTransitions = hasViewTransition;
-    }
-  </script>
+  <script src="/static/js/head-init.js"></script>
+  <script src="/static/vendor/htmx.min.js"></script>
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/app.css">
@@ -58,7 +34,7 @@
         <h2 class="apple-title apple-title-modal">Welcome to MaxMode</h2>
         <p class="apple-caption">Enter your name to get started</p>
       </div>
-      <form class="apple-form" onsubmit="MaxMode.handleOnboardingSubmit(event)">
+      <form id="onboarding-form" class="apple-form">
         <input type="text" id="onboarding-name"
                class="apple-input"
                placeholder="Your name" required autofocus>
@@ -103,7 +79,7 @@
   </main>
 
   <!-- Scripts -->
-  <script src="/static/js/app.js"></script>
+  <script type="module" src="/static/js/bootstrap.mjs"></script>
   <script src="/static/js/sw-register.js"></script>
 </body>
 </html>

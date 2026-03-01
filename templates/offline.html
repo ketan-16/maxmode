@@ -6,21 +6,7 @@
   <title>Offline - MaxMode</title>
   <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
-  <script>
-    (function () {
-      var root = document.documentElement;
-
-      function setUiPlatform() {
-        var compact = window.matchMedia("(max-width: 1024px)").matches;
-        var noHover = window.matchMedia("(hover: none)").matches;
-        var coarsePointer = window.matchMedia("(pointer: coarse)").matches;
-        root.setAttribute("data-ui-platform", (compact || noHover || coarsePointer) ? "ios" : "macos");
-      }
-
-      setUiPlatform();
-      window.addEventListener("resize", setUiPlatform, { passive: true });
-    })();
-  </script>
+  <script src="/static/js/head-init.js"></script>
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body class="app-body offline-body">
@@ -29,8 +15,9 @@
       <div class="offline-icon" aria-hidden="true">📡</div>
       <h1 class="apple-title offline-title">You're Offline</h1>
       <p class="apple-caption offline-copy">Check your internet connection and try again.</p>
-      <button class="apple-btn apple-btn-primary" onclick="location.reload()">Retry</button>
+      <button type="button" class="apple-btn apple-btn-primary" data-action="retry-offline">Retry</button>
     </section>
   </main>
+  <script type="module" src="/static/js/bootstrap.mjs"></script>
 </body>
 </html>

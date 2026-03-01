@@ -46,5 +46,8 @@ async def service_worker():
     return FileResponse(
         BASE_DIR / "service-worker.js",
         media_type="application/javascript",
-        headers={"Service-Worker-Allowed": "/"},
+        headers={
+            "Service-Worker-Allowed": "/",
+            "Cache-Control": "no-cache",
+        },
     )

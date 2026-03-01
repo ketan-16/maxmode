@@ -325,9 +325,6 @@ body.app-body {
   font-family: var(--font-system);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
 .app-body.modal-scroll-locked {
@@ -341,6 +338,20 @@ body.app-body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.app-nav,
+.app-logo,
+.app-nav-link,
+.app-nav-avatar-link,
+.apple-btn,
+.apple-icon-btn,
+.weight-swipe-row,
+.weight-pill-btn,
+.weight-kebab-trigger {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button,

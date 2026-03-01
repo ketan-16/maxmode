@@ -1,4 +1,4 @@
-var CACHE_NAME = "maxmode-v2";
+var CACHE_NAME = "maxmode-v3";
 
 var PRECACHE_URLS = [
   "/",
@@ -6,12 +6,29 @@ var PRECACHE_URLS = [
   "/profile",
   "/offline",
   "/static/css/app.css",
-  "/static/js/app.js",
+  "/static/js/head-init.js",
+  "/static/js/bootstrap.mjs",
   "/static/js/sw-register.js",
-  "/static/manifest.json"
+  "/static/js/modules/data-utils.mjs",
+  "/static/js/modules/storage.mjs",
+  "/static/js/modules/charts.mjs",
+  "/static/js/views/dashboard-ui.mjs",
+  "/static/js/views/profile-ui.mjs",
+  "/static/js/views/weights-ui.mjs",
+  "/static/vendor/htmx.min.js",
+  "/static/manifest.json",
+  "/static/icons/icon-192.png",
+  "/static/icons/icon-512.png"
 ];
 
-// Install — precache app shell
+function isSameOrigin(requestUrl) {
+  return requestUrl.origin === self.location.origin;
+}
+
+function isCacheableResponse(response) {
+  return !!(response && response.ok && (response.type === "basic" || response.type === "default"));
+}
+
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
@@ -21,58 +38,73 @@ self.addEventListener("install", function (event) {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
 self.addEventListener("activate", function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(
         keys
-          .filter(function (k) { return k !== CACHE_NAME; })
-          .map(function (k) { return caches.delete(k); })
+          .filter(function (key) { return key !== CACHE_NAME; })
+          .map(function (key) { return caches.delete(key); })
       );
     })
   );
   self.clients.claim();
 });
 
-// Fetch — network-first for navigation, cache-first for static assets
-self.addEventListener("fetch", function (event) {
-  // Skip HTMX partial requests to avoid caching partials under full-page URLs
-  if (event.request.headers.get("HX-Request")) return;
+self.addEventListener("message", function (event) {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 
-  // Navigation requests (HTML pages)
-  if (event.request.mode === "navigate") {
+self.addEventListener("fetch", function (event) {
+  var request = event.request;
+
+  if (request.method !== "GET") return;
+  if (request.headers.get("HX-Request")) return;
+
+  var url = new URL(request.url);
+  if (!isSameOrigin(url)) return;
+
+  if (request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
-        .then(function (response) {
-          var clone = response.clone();
-          caches.open(CACHE_NAME).then(function (cache) {
-            cache.put(event.request, clone);
-          });
+      (async function () {
+        try {
+          var response = await fetch(request);
+
+          if (isCacheableResponse(response)) {
+            var cache = await caches.open(CACHE_NAME);
+            cache.put(request, response.clone());
+          }
+
           return response;
-        })
-        .catch(function () {
-          return caches.match(event.request).then(function (cached) {
-            return cached || caches.match("/offline");
-          });
-        })
+        } catch (_err) {
+          var cachedPage = await caches.match(request);
+          if (cachedPage) return cachedPage;
+          return caches.match("/offline");
+        }
+      })()
     );
     return;
   }
 
-  // Static assets — cache-first
-  var url = new URL(event.request.url);
   if (url.pathname.startsWith("/static/")) {
     event.respondWith(
-      caches.match(event.request).then(function (cached) {
-        return cached || fetch(event.request).then(function (response) {
-          var clone = response.clone();
-          caches.open(CACHE_NAME).then(function (cache) {
-            cache.put(event.request, clone);
-          });
+      (async function () {
+        var cachedAsset = await caches.match(request);
+        if (cachedAsset) return cachedAsset;
+
+        try {
+          var response = await fetch(request);
+          if (isCacheableResponse(response)) {
+            var cache = await caches.open(CACHE_NAME);
+            cache.put(request, response.clone());
+          }
           return response;
-        });
-      })
+        } catch (_err) {
+          return cachedAsset || Response.error();
+        }
+      })()
     );
   }
 });

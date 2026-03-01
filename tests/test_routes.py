@@ -1,0 +1,70 @@
+import unittest
+
+from starlette.requests import Request
+
+import main
+
+
+def make_request(path: str, hx: bool = False) -> Request:
+    headers = []
+    if hx:
+        headers.append((b"hx-request", b"true"))
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("utf-8"),
+        "query_string": b"",
+        "root_path": "",
+        "headers": headers,
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "app": main.app,
+    }
+    return Request(scope)
+
+
+class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dashboard_full_page_response(self):
+        response = await main.dashboard(make_request("/"))
+        self.assertEqual(response.template.name, "dashboard.html")
+        self.assertEqual(response.headers.get("vary"), "HX-Request")
+
+    async def test_dashboard_partial_for_hx_request(self):
+        response = await main.dashboard(make_request("/", hx=True))
+        self.assertEqual(response.template.name, "partials/dashboard_content.html")
+        self.assertEqual(response.headers.get("vary"), "HX-Request")
+
+    async def test_weights_partial_for_hx_request(self):
+        response = await main.weights(make_request("/weights", hx=True))
+        self.assertEqual(response.template.name, "partials/weights_content.html")
+        self.assertEqual(response.headers.get("vary"), "HX-Request")
+
+    async def test_profile_partial_for_hx_request(self):
+        response = await main.profile(make_request("/profile", hx=True))
+        self.assertEqual(response.template.name, "partials/profile_content.html")
+        self.assertEqual(response.headers.get("vary"), "HX-Request")
+
+    async def test_vary_header_for_hx_routes(self):
+        for path, handler in (
+            ("/", main.dashboard),
+            ("/weights", main.weights),
+            ("/profile", main.profile),
+        ):
+            with self.subTest(path=path):
+                response = await handler(make_request(path))
+                self.assertEqual(response.headers.get("vary"), "HX-Request")
+
+    async def test_service_worker_headers(self):
+        response = await main.service_worker()
+        self.assertEqual(response.headers.get("service-worker-allowed"), "/")
+        cache_control = response.headers.get("cache-control", "")
+        self.assertIn("no-cache", cache_control)
+
+
+if __name__ == "__main__":
+    unittest.main()

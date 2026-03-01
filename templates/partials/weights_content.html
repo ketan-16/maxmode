@@ -1,7 +1,8 @@
 <section class="app-section">
   <div class="app-section-header">
     <h1 class="apple-title apple-title-no-margin">Weights</h1>
-    <button onclick="MaxMode.openWeightModal()"
+    <button type="button"
+            data-action="open-weight-modal"
             class="apple-btn apple-btn-primary apple-btn-compact apple-btn-with-icon">
       <svg class="apple-icon apple-icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -31,13 +32,13 @@
     <div class="apple-modal apple-modal-weight" role="dialog" aria-modal="true" aria-labelledby="weight-modal-title">
       <div class="apple-modal-header">
         <h2 id="weight-modal-title" class="apple-subtitle apple-subtitle-no-margin">Log Weight</h2>
-        <button type="button" onclick="MaxMode.closeWeightModal()" class="apple-icon-btn">
+        <button type="button" data-action="close-weight-modal" class="apple-icon-btn">
           <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </div>
-      <form class="apple-form" onsubmit="MaxMode.handleWeightSubmit(event)">
+      <form id="weight-form" class="apple-form">
         <label for="weight-input" class="apple-field-label">Weight (kg)</label>
         <input type="number" id="weight-input" step="0.1" min="0.1" max="999"
                inputmode="decimal" enterkeyhint="done"
