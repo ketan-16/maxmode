@@ -12,3 +12,6 @@ wheels/
 # OS Specific files
 .DS_Store
 Thumbs.db
+
+# Prompting files
+prompt_history.md
