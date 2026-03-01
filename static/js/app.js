@@ -542,6 +542,10 @@ window.MaxMode = (function () {
   function buildSmoothLinePath(points) {
     if (!points || points.length === 0) return "";
 
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
     if (points.length === 1) {
       var only = points[0];
       var x1 = (only.x - 0.01).toFixed(2);
@@ -551,6 +555,12 @@ window.MaxMode = (function () {
     }
 
     var first = points[0];
+    if (points.length === 2) {
+      var second = points[1];
+      return "M " + first.x.toFixed(2) + " " + first.y.toFixed(2)
+        + " L " + second.x.toFixed(2) + " " + second.y.toFixed(2);
+    }
+
     var path = "M " + first.x.toFixed(2) + " " + first.y.toFixed(2);
 
     for (var i = 0; i < points.length - 1; i++) {
@@ -559,10 +569,29 @@ window.MaxMode = (function () {
       var p2 = points[i + 1];
       var p3 = points[Math.min(points.length - 1, i + 2)];
 
+      if (p2.x <= p1.x) {
+        path += " L " + p2.x.toFixed(2) + " " + p2.y.toFixed(2);
+        continue;
+      }
+
       var cp1x = p1.x + ((p2.x - p0.x) / 6);
       var cp1y = p1.y + ((p2.y - p0.y) / 6);
       var cp2x = p2.x - ((p3.x - p1.x) / 6);
       var cp2y = p2.y - ((p3.y - p1.y) / 6);
+
+      // Keep cubic handles within each segment to prevent backward loops.
+      cp1x = clamp(cp1x, p1.x, p2.x);
+      cp2x = clamp(cp2x, p1.x, p2.x);
+      if (cp1x > cp2x) {
+        var midX = (p1.x + p2.x) / 2;
+        cp1x = midX;
+        cp2x = midX;
+      }
+
+      var minY = Math.min(p1.y, p2.y);
+      var maxY = Math.max(p1.y, p2.y);
+      cp1y = clamp(cp1y, minY, maxY);
+      cp2y = clamp(cp2y, minY, maxY);
 
       path += " C "
         + cp1x.toFixed(2) + " " + cp1y.toFixed(2) + ", "
