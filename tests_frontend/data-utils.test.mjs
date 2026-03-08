@@ -48,8 +48,8 @@ test("filterWeightSeriesForRange keeps anchor point before cutoff", () => {
 
 test("weight formatters produce stable output", () => {
   assert.equal(formatWeightNumber(80), "80");
-  assert.equal(formatWeightNumber(80.26), "80.3");
+  assert.equal(formatWeightNumber(80.26), "80.26");
   assert.equal(formatSignedWeightDelta(0, "kg"), "0 kg");
-  assert.equal(formatSignedWeightDelta(1.24, "kg"), "+1.2 kg");
-  assert.equal(formatSignedWeightDelta(-1.24, "kg"), "-1.2 kg");
+  assert.equal(formatSignedWeightDelta(1.24, "kg"), "+1.24 kg");
+  assert.equal(formatSignedWeightDelta(-1.24, "kg"), "-1.24 kg");
 });

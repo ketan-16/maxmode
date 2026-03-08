@@ -31,6 +31,10 @@
   --desktop-shell-max-width: calc(var(--apple-max-content-width) + var(--desktop-sidebar-open-width) + var(--desktop-shell-extra-inline));
   --desktop-main-inline-padding: 1.4rem;
   --mobile-bottom-nav-height: 5.25rem;
+  --calorie-toast-edge-offset: 0.7rem;
+  --calorie-toast-inline-margin-phone: 0.65rem;
+  --calorie-toast-inline-margin-desktop: 1.35rem;
+  --calorie-toast-phone-edge-offset: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + var(--calorie-toast-edge-offset));
   color-scheme: light dark;
 }
 
@@ -943,9 +947,32 @@ html.no-view-transition .htmx-settling {
   margin-top: 1.5rem;
 }
 
-.calories-placeholder-card {
+.calories-maintenance-card {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.55rem;
+}
+
+.calories-edit-btn {
+  width: fit-content;
+  margin-top: 0.45rem;
+}
+
+.calories-source-note {
+  color: var(--apple-tertiary-label);
+}
+
+.calories-missing-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.calories-missing-list {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  display: grid;
+  gap: 0.3rem;
+  color: var(--apple-secondary-label);
+  font-size: 0.9rem;
 }
 
 .apple-title {
@@ -1447,6 +1474,42 @@ html.no-view-transition .htmx-settling {
   -webkit-backdrop-filter: none;
 }
 
+.app-overlay-calories {
+  background: var(--apple-overlay);
+}
+
+#calorie-setup-modal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#calorie-setup-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#calorie-setup-modal.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#profile-activity-modal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#profile-activity-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#profile-activity-modal.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
 #weight-modal {
   opacity: 0;
   pointer-events: none;
@@ -1496,10 +1559,335 @@ html.no-view-transition .htmx-settling {
   opacity: 0;
 }
 
+.apple-modal-calories {
+  width: min(32rem, calc(100% - 2rem));
+  max-height: min(90vh, 48rem);
+  overflow: hidden;
+  transform: translateY(var(--motion-distance-modal)) scale(var(--motion-scale-enter));
+  opacity: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  transition:
+    transform var(--motion-duration-modal) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#calorie-setup-modal.is-open .apple-modal-calories {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+#calorie-setup-modal.is-closing .apple-modal-calories {
+  transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
+  opacity: 0;
+}
+
+.apple-modal-profile-activity {
+  width: min(34rem, calc(100% - 2rem));
+  max-height: min(90vh, 46rem);
+  overflow: auto;
+  transform: translateY(var(--motion-distance-modal)) scale(var(--motion-scale-enter));
+  opacity: 0;
+  display: grid;
+  gap: 0.9rem;
+  transition:
+    transform var(--motion-duration-modal) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#profile-activity-modal.is-open .apple-modal-profile-activity {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+#profile-activity-modal.is-closing .apple-modal-profile-activity {
+  transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
+  opacity: 0;
+}
+
 .apple-form {
   margin-top: 0.95rem;
   display: grid;
   gap: 0.85rem;
+}
+
+.apple-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: var(--apple-radius-control);
+  background: var(--apple-fill);
+  width: fit-content;
+}
+
+.apple-segmented-btn {
+  appearance: none;
+  border: 0;
+  border-radius: calc(var(--apple-radius-control) - 4px);
+  background: transparent;
+  color: var(--apple-secondary-label);
+  padding: 0.38rem 0.78rem;
+  font-size: 0.86rem;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.apple-segmented-btn.is-active {
+  background: var(--apple-surface);
+  color: var(--apple-label);
+  box-shadow: var(--apple-shadow-card);
+}
+
+.apple-segmented-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--apple-focus-ring);
+}
+
+.calorie-setup-form {
+  margin-top: 0.45rem;
+  min-height: 0;
+  align-content: start;
+}
+
+.calorie-step-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.calorie-step-dot {
+  appearance: none;
+  border: 0;
+  width: 0.58rem;
+  height: 0.58rem;
+  padding: 0;
+  border-radius: var(--apple-radius-pill);
+  background: var(--apple-fill-active);
+  cursor: pointer;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.calorie-step-dot:hover {
+  transform: scale(1.08);
+}
+
+.calorie-step-dot.is-active {
+  background: var(--chart-line-strong);
+}
+
+.calorie-step-dot.is-disabled {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.calorie-step-viewport {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.calorie-step-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  transition: transform var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.calorie-step {
+  min-width: 0;
+  display: grid;
+  gap: 0.74rem;
+  align-content: start;
+  max-height: min(56vh, 27rem);
+  overflow-y: auto;
+  padding: 0 0.1rem 0.2rem;
+}
+
+.calorie-input-unit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+
+.calorie-input-unit-row .apple-input {
+  height: 100%;
+}
+
+.calorie-inline-imperial {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.calorie-inline-unit-picker {
+  align-self: stretch;
+}
+
+.calorie-inline-unit-picker .apple-segmented-btn {
+  min-height: 100%;
+}
+
+.calorie-setup-weight-section {
+  border-top: 1px solid var(--apple-separator);
+  margin-top: 0.25rem;
+  padding-top: 0.8rem;
+  display: grid;
+  gap: 0.68rem;
+}
+
+.calories-weight-note {
+  margin-top: -0.25rem;
+}
+
+.calories-setup-error {
+  min-height: 1.35rem;
+  color: var(--apple-destructive);
+}
+
+.calorie-stepper-footer {
+  padding-top: 0.4rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+}
+
+#calorie-step-label {
+  text-align: center;
+}
+
+.calorie-footer-done-slot {
+  width: 100%;
+  margin-top: 0.2rem;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition:
+    max-height var(--motion-duration-modal) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-modal) var(--motion-ease-emphasized),
+    transform var(--motion-duration-modal) var(--motion-ease-emphasized);
+}
+
+.calorie-footer-done-slot.is-visible {
+  max-height: 4rem;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.activity-option-list {
+  display: grid;
+  gap: 0.58rem;
+}
+
+.activity-option-card {
+  appearance: none;
+  border: 1px solid var(--apple-separator);
+  border-radius: calc(var(--apple-radius-control) + 2px);
+  padding: 0.68rem 0.75rem;
+  background: var(--apple-surface-elevated);
+  color: inherit;
+  text-align: left;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 0.62rem;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.activity-option-card:hover {
+  border-color: var(--apple-opaque-separator);
+  background: var(--apple-surface);
+}
+
+.activity-option-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--apple-focus-ring);
+}
+
+.activity-option-card.is-selected {
+  border-color: var(--chart-line-strong);
+  background: var(--apple-surface);
+  box-shadow: 0 0 0 1px var(--chart-line-strong);
+}
+
+.activity-option-radio {
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--apple-radius-pill);
+  border: 1.5px solid var(--apple-opaque-separator);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.activity-option-card.is-selected .activity-option-radio {
+  border-color: var(--chart-line-strong);
+  background: color-mix(in srgb, var(--chart-line-strong) 18%, transparent);
+}
+
+.activity-option-card.is-selected .activity-option-radio::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: var(--apple-radius-pill);
+  background: var(--chart-line-strong);
+}
+
+.activity-option-icon {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: calc(var(--apple-radius-control) - 2px);
+  background: var(--apple-fill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activity-option-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.activity-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.activity-option-title {
+  font-size: 0.94rem;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  color: var(--apple-label);
+}
+
+.activity-option-description {
+  font-size: 0.77rem;
+  line-height: 1.34;
+  color: var(--apple-secondary-label);
+}
+
+.apple-btn.is-disabled {
+  opacity: 0.56;
+  pointer-events: none;
 }
 
 .apple-modal-header {
@@ -1799,22 +2187,81 @@ html.no-view-transition .htmx-settling {
   margin-bottom: 1rem;
 }
 
-.profile-stats {
-  margin-top: 1.3rem;
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--apple-separator);
-}
-
-.profile-stat-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .profile-stat-value {
   font-size: 0.95rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+}
+
+.profile-calorie-card {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.profile-form-grid {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.profile-height-fields {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.profile-height-imperial-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-activity-row {
+  border-top: 1px solid var(--apple-separator);
+  padding-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.profile-activity-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.profile-activity-edit-btn {
+  flex-shrink: 0;
+}
+
+.profile-weight-edit-btn {
+  flex-shrink: 0;
+}
+
+.profile-weight-edit-row {
+  border-top: 1px solid var(--apple-separator);
+  padding-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.profile-preferences-card {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.profile-preferences-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.profile-activity-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
 }
 
 /* Weight interactions */
@@ -2148,6 +2595,40 @@ html.no-view-transition .htmx-settling {
   color: var(--weight-label);
 }
 
+.calorie-update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--calorie-toast-phone-edge-offset);
+  top: auto;
+  transform: translate3d(-50%, 10px, 0);
+  width: max-content;
+  max-width: calc(100vw - (var(--calorie-toast-inline-margin-phone) * 2));
+  z-index: 95;
+  padding: 0.78rem 0.95rem;
+  border-radius: calc(var(--apple-radius-control) + 2px);
+  background: var(--apple-nav-bg);
+  border: 1px solid var(--apple-separator);
+  color: var(--apple-label);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: normal;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: var(--apple-shadow-floating);
+  transition:
+    transform var(--motion-duration-base) var(--motion-ease-standard),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.calorie-update-toast.is-visible {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0);
+}
+
 .offline-body {
   display: block;
 }
@@ -2181,6 +2662,19 @@ html.no-view-transition .htmx-settling {
 }
 
 @media (max-width: 640px) {
+  .apple-modal-calories {
+    width: min(26rem, calc(100% - 1rem));
+    padding: 1rem;
+  }
+
+  .calorie-step {
+    max-height: min(54vh, 25rem);
+  }
+
+  .calorie-update-toast {
+    bottom: var(--calorie-toast-phone-edge-offset);
+  }
+
   .dashboard-weight-card {
     padding: 0.96rem;
   }
@@ -2300,6 +2794,29 @@ html.no-view-transition .htmx-settling {
     margin: 0 auto;
     padding: 2.4rem var(--desktop-main-inline-padding) 3.1rem;
   }
+
+  .profile-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .profile-height-fields {
+    grid-column: 1 / -1;
+  }
+
+  .profile-preferences-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+}
+
+@media (min-width: 641px) {
+  .calorie-update-toast {
+    top: var(--calorie-toast-phone-edge-offset);
+    bottom: auto;
+    transform: translate3d(-50%, -10px, 0);
+    max-width: calc(100vw - (var(--calorie-toast-inline-margin-desktop) * 2));
+  }
 }
 
 @media (min-width: 1024px) {
@@ -2378,6 +2895,12 @@ html.no-view-transition .htmx-settling {
   #main-content,
   #weight-modal,
   #weight-modal .apple-modal-weight,
+  #calorie-setup-modal,
+  #calorie-setup-modal .apple-modal-calories,
+  #profile-activity-modal,
+  #profile-activity-modal .apple-modal-profile-activity,
+  .calorie-step-track,
+  .calorie-update-toast,
   .weight-chart-svg,
   .weight-chart-path-line,
   .weight-chart-range-btn,

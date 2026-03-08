@@ -5,21 +5,32 @@ import {
 } from "./modules/storage.mjs";
 import { bindWeightChartThemeEvents } from "./modules/charts.mjs";
 import { render as renderDashboard } from "./views/dashboard-ui.mjs";
-import { render as renderProfile, renderNavAvatar } from "./views/profile-ui.mjs";
+import {
+  handleEscape as handleProfileEscape,
+  render as renderProfile,
+  renderNavAvatar
+} from "./views/profile-ui.mjs";
 import {
   closeDeleteSheet,
   closeWeightModal,
   confirmDeleteWeight,
-  handleDocumentClick,
-  handleDocumentTouchStart,
-  handleEscape,
+  handleDocumentClick as handleWeightsDocumentClick,
+  handleDocumentTouchStart as handleWeightsDocumentTouchStart,
+  handleEscape as handleWeightsEscape,
   handleWeightSubmit,
   onViewportChange,
   openWeightModal,
   render as renderWeights,
-  resetViewUiState,
+  resetViewUiState as resetWeightsViewUiState,
   setRequestRender
 } from "./views/weights-ui.mjs";
+import {
+  handleDocumentClick as handleCaloriesDocumentClick,
+  handleEscape as handleCaloriesEscape,
+  handleSubmit as handleCaloriesSubmit,
+  render as renderCalories,
+  resetViewUiState as resetCaloriesViewUiState
+} from "./views/calories-ui.mjs";
 
 let globalEventsBound = false;
 let renderFrame = null;
@@ -234,10 +245,27 @@ function detectActiveView() {
   if (document.getElementById("profile-name")) {
     return "profile";
   }
-  if (document.getElementById("calories-coming-soon")) {
+  if (document.getElementById("calories-page-root")) {
     return "calories";
   }
   return "none";
+}
+
+function resetAllViewUiState() {
+  resetWeightsViewUiState();
+  resetCaloriesViewUiState();
+}
+
+function maybeOpenWeightModalFromQuery(activeView) {
+  if (activeView !== "weights") return;
+
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("open_weight_modal") !== "1") return;
+
+  openWeightModal();
+  url.searchParams.delete("open_weight_modal");
+  const nextUrl = `${url.pathname}${url.search ? url.search : ""}${url.hash}`;
+  window.history.replaceState(window.history.state, "", nextUrl);
 }
 
 function applyOnboarding(state) {
@@ -268,11 +296,17 @@ function renderActiveView() {
 
   if (activeView === "weights") {
     renderWeights(state);
+    maybeOpenWeightModalFromQuery(activeView);
     return;
   }
 
   if (activeView === "profile") {
     renderProfile(state);
+    return;
+  }
+
+  if (activeView === "calories") {
+    renderCalories(state);
   }
 }
 
@@ -314,7 +348,8 @@ function bindGlobalEvents() {
   document.addEventListener("click", (event) => {
     const target = event.target;
 
-    if (handleDocumentClick(event)) return;
+    if (handleWeightsDocumentClick(event)) return;
+    if (handleCaloriesDocumentClick(event)) return;
 
     const action = target && target.closest ? target.closest("[data-action]") : null;
     if (!action) return;
@@ -356,16 +391,23 @@ function bindGlobalEvents() {
 
     if (form && form.id === "weight-form") {
       handleWeightSubmit(event);
+      return;
+    }
+
+    if (handleCaloriesSubmit(event)) {
+      return;
     }
   });
 
   document.addEventListener("touchstart", (event) => {
-    handleDocumentTouchStart(event);
+    handleWeightsDocumentTouchStart(event);
   }, { passive: true });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    handleEscape();
+    handleWeightsEscape();
+    handleCaloriesEscape();
+    handleProfileEscape();
   });
 
   const handleViewportEvents = () => {
@@ -403,7 +445,7 @@ function configureViewTransitions() {
 function onPageLoad() {
   configureViewTransitions();
   initSidebarState();
-  resetViewUiState();
+  resetAllViewUiState();
   bindGlobalEvents();
   renderActiveView();
 }
@@ -411,13 +453,13 @@ function onPageLoad() {
 document.addEventListener("DOMContentLoaded", onPageLoad);
 document.body.addEventListener("htmx:afterSwap", (event) => {
   if (event.detail && event.detail.target && event.detail.target.id === "main-content") {
-    resetViewUiState();
+    resetAllViewUiState();
     queueRender();
     queueNavIndicatorSync();
   }
 });
 document.body.addEventListener("htmx:historyRestore", () => {
-  resetViewUiState();
+  resetAllViewUiState();
   queueRender();
   queueNavIndicatorSync();
 });

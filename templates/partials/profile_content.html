@@ -1,4 +1,4 @@
-<section class="app-section">
+<section class="app-section" id="profile-page-root">
   <h1 class="apple-title">Profile</h1>
 
   <div class="apple-card app-card">
@@ -10,11 +10,116 @@
       <h2 id="profile-name" class="apple-subtitle">--</h2>
       <p id="profile-since" class="apple-caption apple-caption-tight"></p>
     </div>
+  </div>
 
-    <div class="profile-stats">
-      <div class="profile-stat-row">
-        <span class="apple-caption">Total Entries</span>
-        <span id="profile-total-entries" class="profile-stat-value">0</span>
+  <div class="apple-card app-card profile-calorie-card">
+    <h2 class="apple-subtitle apple-subtitle-no-margin">Calorie Profile</h2>
+
+    <div class="profile-form-grid">
+      <div>
+        <label for="profile-age-input" class="apple-field-label">Age</label>
+        <input type="number" id="profile-age-input" min="1" max="120" step="1" inputmode="numeric" class="apple-input" placeholder="e.g. 28">
+      </div>
+
+      <div>
+        <label for="profile-gender-input" class="apple-field-label">Gender</label>
+        <select id="profile-gender-input" class="apple-input">
+          <option value="">Select gender</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </div>
+
+      <div class="profile-height-fields">
+        <input type="hidden" id="profile-height-unit" value="cm">
+        <div id="profile-height-cm-field">
+          <label for="profile-height-cm-input" class="apple-field-label">Height (cm)</label>
+          <input type="number" id="profile-height-cm-input" min="50" max="272" step="0.01" inputmode="decimal" class="apple-input" placeholder="e.g. 175">
+        </div>
+
+        <div id="profile-height-imperial-field" class="hidden profile-height-imperial-grid">
+          <div>
+            <label for="profile-height-ft-input" class="apple-field-label">Feet</label>
+            <input type="number" id="profile-height-ft-input" min="1" max="8" step="1" inputmode="numeric" class="apple-input" placeholder="5">
+          </div>
+          <div>
+            <label for="profile-height-in-input" class="apple-field-label">Inches</label>
+            <input type="number" id="profile-height-in-input" min="0" max="11" step="1" inputmode="numeric" class="apple-input" placeholder="9">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-activity-row">
+      <div class="profile-activity-copy">
+        <p class="apple-caption">Activity level</p>
+        <p id="profile-activity-level-text" class="profile-stat-value">Not set</p>
+      </div>
+      <button type="button"
+              data-action="open-profile-activity-modal"
+              class="apple-icon-btn profile-activity-edit-btn"
+              aria-label="Edit activity level">
+        <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 5 4 4"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div class="profile-weight-edit-row">
+      <div>
+        <p class="apple-caption">Latest logged weight</p>
+        <p id="profile-latest-weight" class="profile-stat-value">--</p>
+      </div>
+      <a href="/weights?open_weight_modal=1"
+         hx-get="/weights?open_weight_modal=1"
+         hx-target="#main-content"
+         hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+         hx-push-url="true"
+         class="apple-icon-btn profile-weight-edit-btn"
+         aria-label="Edit weight">
+        <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 5 4 4"></path>
+        </svg>
+      </a>
+    </div>
+  </div>
+
+  <div class="apple-card app-card profile-preferences-card">
+    <h2 class="apple-subtitle apple-subtitle-no-margin">User Preferences</h2>
+    <div class="profile-preferences-grid">
+      <div>
+        <label for="profile-pref-height-unit" class="apple-field-label">Preferred height unit</label>
+        <select id="profile-pref-height-unit" class="apple-input">
+          <option value="cm">cm</option>
+          <option value="ft-in">ft + in</option>
+        </select>
+      </div>
+      <div>
+        <label for="profile-pref-weight-unit" class="apple-field-label">Preferred weight unit</label>
+        <select id="profile-pref-weight-unit" class="apple-input">
+          <option value="kg">kg</option>
+          <option value="lb">lb</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-activity-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-profile-activity" role="dialog" aria-modal="true" aria-labelledby="profile-activity-title">
+      <div class="apple-modal-header">
+        <h2 id="profile-activity-title" class="apple-subtitle apple-subtitle-no-margin">Activity Level</h2>
+        <button type="button" data-action="close-profile-activity-modal" class="apple-icon-btn" aria-label="Close activity selection">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div id="profile-activity-options" class="activity-option-list"></div>
+      <div class="profile-activity-modal-actions">
+        <button type="button" data-action="close-profile-activity-modal" class="apple-btn apple-btn-neutral">Cancel</button>
+        <button type="button" id="profile-activity-save-btn" data-action="save-profile-activity" class="apple-btn apple-btn-primary" disabled>Save</button>
       </div>
     </div>
   </div>

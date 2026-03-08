@@ -39,12 +39,13 @@
         </button>
       </div>
       <form id="weight-form" class="apple-form">
-        <label for="weight-input" class="apple-field-label">Weight (kg)</label>
-        <input type="number" id="weight-input" step="0.1" min="0.1" max="999"
+        <input type="hidden" id="weight-input-unit" value="kg">
+        <label for="weight-input" id="weight-input-label" class="apple-field-label">Weight (kg)</label>
+        <input type="number" id="weight-input" step="0.01" min="0.01" max="999"
                inputmode="decimal" enterkeyhint="done"
                autocomplete="off" autocorrect="off" autocapitalize="off"
                class="apple-input apple-input-metric"
-               placeholder="0.0" required>
+               placeholder="0.00" required>
         <button type="submit"
                 class="apple-btn apple-btn-primary apple-btn-block">
           <span id="weight-submit-label">Save</span>
@@ -93,4 +94,6 @@
       </div>
     </div>
   </div>
+
+  <div id="calorie-update-toast" class="calorie-update-toast hidden" role="status" aria-live="polite"></div>
 </section>

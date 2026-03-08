@@ -163,11 +163,9 @@ export function relativeTimeStrict(iso) {
 }
 
 export function formatWeightNumber(value) {
-  const rounded = Math.round(value * 10) / 10;
-  if (Math.abs(rounded - Math.round(rounded)) < 0.01) {
-    return String(Math.round(rounded));
-  }
-  return rounded.toFixed(1);
+  const rounded = Math.round(value * 100) / 100;
+  if (!Number.isFinite(rounded)) return "--";
+  return rounded.toFixed(2).replace(/\.?0+$/, "");
 }
 
 export function formatSignedWeightDelta(value, unit) {
@@ -175,7 +173,7 @@ export function formatSignedWeightDelta(value, unit) {
 
   const normalizedUnit = unit || "kg";
   const magnitude = Math.abs(value);
-  if (magnitude < 0.05) return `0 ${normalizedUnit}`;
+  if (magnitude < 0.005) return `0 ${normalizedUnit}`;
 
   const sign = value > 0 ? "+" : "-";
   return `${sign}${formatWeightNumber(magnitude)} ${normalizedUnit}`;
@@ -187,7 +185,7 @@ export function buildDashboardTrendNote(change30d, unit) {
   }
 
   const normalizedUnit = unit || "kg";
-  if (Math.abs(change30d) < 0.05) {
+  if (Math.abs(change30d) < 0.005) {
     return "Stable over the last 30 days.";
   }
 

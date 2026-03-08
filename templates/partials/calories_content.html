@@ -1,8 +1,152 @@
-<section class="app-section">
+<section id="calories-page-root" class="app-section">
   <h1 class="apple-title">Calories</h1>
 
-  <div class="apple-card app-card calories-placeholder-card">
-    <p id="calories-coming-soon" class="apple-subtitle apple-subtitle-no-margin">Calories - Coming Soon</p>
-    <p class="apple-caption apple-caption-tight">Tracking and insights will be added in a future update.</p>
+  <div id="calories-maintenance-card" class="apple-card app-card calories-maintenance-card hidden">
+    <p class="apple-overline">Maintenance Calories</p>
+    <p id="calories-maintenance-value" class="apple-metric">--</p>
+    <p id="calories-maintenance-meta" class="apple-caption">Complete your profile to calculate maintenance calories.</p>
+    <p id="calories-weight-source" class="apple-caption calories-source-note"></p>
+    <button type="button"
+            data-action="open-calorie-setup-modal"
+            class="apple-btn apple-btn-neutral apple-btn-compact calories-edit-btn">
+      Edit Details
+    </button>
+  </div>
+
+  <div id="calories-missing-card" class="apple-card app-card calories-missing-card hidden">
+    <p class="apple-subtitle apple-subtitle-no-margin">Set up your calorie profile</p>
+    <p class="apple-caption apple-caption-tight">We need a few details to calculate maintenance calories.</p>
+    <ul id="calories-missing-list" class="calories-missing-list"></ul>
+    <button type="button"
+            data-action="open-calorie-setup-modal"
+            class="apple-btn apple-btn-primary apple-btn-block">
+      Complete Setup
+    </button>
+  </div>
+
+  <div id="calorie-setup-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-calories" role="dialog" aria-modal="true" aria-labelledby="calorie-setup-title">
+      <div class="apple-modal-header">
+        <h2 id="calorie-setup-title" class="apple-subtitle apple-subtitle-no-margin">Calorie Setup</h2>
+        <button type="button" data-action="close-calorie-setup-modal" class="apple-icon-btn" aria-label="Close calorie setup">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <form id="calorie-setup-form" class="apple-form calorie-setup-form">
+        <input type="hidden" id="calorie-height-unit" value="cm">
+        <input type="hidden" id="calorie-weight-unit" value="kg">
+
+        <div id="calorie-step-viewport" class="calorie-step-viewport">
+          <div id="calorie-step-track" class="calorie-step-track">
+            <section class="calorie-step" data-calorie-step="0">
+              <label for="calorie-age-input" class="apple-field-label">Age</label>
+              <input type="number"
+                     id="calorie-age-input"
+                     min="1"
+                     max="120"
+                     step="1"
+                     inputmode="numeric"
+                     class="apple-input"
+                     placeholder="e.g. 28"
+                     required>
+
+              <label for="calorie-gender-input" class="apple-field-label">Gender</label>
+              <select id="calorie-gender-input" class="apple-input" required>
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </section>
+
+            <section class="calorie-step" data-calorie-step="1">
+              <label for="calorie-height-cm-input" class="apple-field-label">Height</label>
+              <div class="calorie-input-unit-row">
+                <div id="calorie-height-cm-field">
+                  <input type="number"
+                         id="calorie-height-cm-input"
+                         min="50"
+                         max="272"
+                         step="0.01"
+                         inputmode="decimal"
+                         class="apple-input"
+                         placeholder="e.g. 175">
+                </div>
+
+                <div id="calorie-height-imperial-field" class="hidden calorie-inline-imperial">
+                  <input type="number"
+                         id="calorie-height-ft-input"
+                         min="1"
+                         max="8"
+                         step="1"
+                         inputmode="numeric"
+                         class="apple-input"
+                         placeholder="ft">
+                  <input type="number"
+                         id="calorie-height-in-input"
+                         min="0"
+                         max="11"
+                         step="1"
+                         inputmode="numeric"
+                         class="apple-input"
+                         placeholder="in">
+                </div>
+
+                <div class="apple-segmented calorie-inline-unit-picker" role="group" aria-label="Height unit">
+                  <button type="button" class="apple-segmented-btn is-active" data-height-unit="cm">cm</button>
+                  <button type="button" class="apple-segmented-btn" data-height-unit="ft-in">ft + in</button>
+                </div>
+              </div>
+
+              <div id="calorie-setup-weight-section" class="calorie-setup-weight-section">
+                <label for="calorie-weight-input" class="apple-field-label">Weight</label>
+                <div class="calorie-input-unit-row">
+                  <input type="number"
+                         id="calorie-weight-input"
+                         min="1"
+                         max="1400"
+                         step="0.01"
+                         inputmode="decimal"
+                         class="apple-input"
+                         placeholder="e.g. 72.5">
+                  <div class="apple-segmented calorie-inline-unit-picker" role="group" aria-label="Weight unit">
+                    <button type="button" class="apple-segmented-btn is-active" data-setup-weight-unit="kg">kg</button>
+                    <button type="button" class="apple-segmented-btn" data-setup-weight-unit="lb">lb</button>
+                  </div>
+                </div>
+                <p class="apple-caption calories-weight-note">Weight is asked only when no previous weight logs exist.</p>
+              </div>
+            </section>
+
+            <section class="calorie-step" data-calorie-step="2">
+              <label class="apple-field-label">Activity Level</label>
+              <input type="hidden" id="calorie-activity-level-input" value="">
+              <div id="calorie-activity-options" class="activity-option-list"></div>
+            </section>
+          </div>
+        </div>
+
+        <p id="calorie-setup-error" class="apple-caption calories-setup-error" aria-live="polite"></p>
+      </form>
+
+      <div class="calorie-stepper-footer">
+        <p id="calorie-step-label" class="apple-caption">Step 1 of 3</p>
+        <div id="calorie-step-dots" class="calorie-step-dots" role="tablist" aria-label="Calorie setup steps">
+          <button type="button" class="calorie-step-dot is-active" data-action="go-calorie-step" data-step-index="0" aria-label="Go to step 1"></button>
+          <button type="button" class="calorie-step-dot" data-action="go-calorie-step" data-step-index="1" aria-label="Go to step 2"></button>
+          <button type="button" class="calorie-step-dot" data-action="go-calorie-step" data-step-index="2" aria-label="Go to step 3"></button>
+        </div>
+        <div id="calorie-footer-done-slot" class="calorie-footer-done-slot" aria-hidden="true">
+          <button type="submit"
+                  id="calorie-setup-done"
+                  form="calorie-setup-form"
+                  class="apple-btn apple-btn-primary apple-btn-block">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </section>

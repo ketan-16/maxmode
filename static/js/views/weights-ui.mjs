@@ -2,6 +2,7 @@ import {
   addWeight,
   deleteWeight,
   getWeightById,
+  getUserPreferences,
   loadState,
   updateWeight
 } from "../modules/storage.mjs";
@@ -10,6 +11,7 @@ import {
   escapeHtml,
   formatDate,
   formatEntryCount,
+  formatWeightNumber,
   formatTime,
   relativeTime,
   weightLogHasEntries
@@ -18,6 +20,10 @@ import {
   bindWeightChartRangeEvents,
   renderWeightsTrendChart
 } from "../modules/charts.mjs";
+import {
+  calculateMaintenanceFromState,
+  kgToLb
+} from "../modules/calories-utils.mjs";
 
 const SWIPE_CONFIG = {
   SNAP_PX: 52,
@@ -48,6 +54,9 @@ let weightModalTransitionCleanup = null;
 let deleteSheetTransitionCleanup = null;
 let latestState = null;
 let requestRender = () => {};
+let weightInputUnit = "kg";
+let calorieToastTimer = null;
+let calorieToastHideTimer = null;
 
 export function setRequestRender(fn) {
   requestRender = (typeof fn === "function") ? fn : (() => {});
@@ -305,16 +314,95 @@ function toggleDesktopMenu(id) {
 function setWeightModalMode(isEdit) {
   const title = document.getElementById("weight-modal-title");
   const submitLabel = document.getElementById("weight-submit-label");
+  const inputLabel = document.getElementById("weight-input-label");
+  const unitLabel = (weightInputUnit === "lb") ? "lb" : "kg";
   if (title) title.textContent = isEdit ? "Edit Weight" : "Log Weight";
   if (submitLabel) submitLabel.textContent = isEdit ? "Save Changes" : "Save";
+  if (inputLabel) inputLabel.textContent = `Weight (${unitLabel})`;
+}
+
+function clearCalorieToastTimers() {
+  if (calorieToastTimer !== null) {
+    window.clearTimeout(calorieToastTimer);
+    calorieToastTimer = null;
+  }
+  if (calorieToastHideTimer !== null) {
+    window.clearTimeout(calorieToastHideTimer);
+    calorieToastHideTimer = null;
+  }
+}
+
+function hideCalorieToast() {
+  const toast = document.getElementById("calorie-update-toast");
+  if (!toast) return;
+
+  clearCalorieToastTimers();
+  toast.classList.remove("is-visible");
+  calorieToastHideTimer = window.setTimeout(() => {
+    toast.classList.add("hidden");
+    calorieToastHideTimer = null;
+  }, 180);
+}
+
+function showCalorieUpdateToast() {
+  const toast = document.getElementById("calorie-update-toast");
+  if (!toast) return;
+
+  clearCalorieToastTimers();
+  toast.textContent = "Maintenance calories adjusted to current weight";
+  toast.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    toast.classList.add("is-visible");
+  });
+
+  calorieToastTimer = window.setTimeout(() => {
+    hideCalorieToast();
+  }, 2600);
+}
+
+function roundToTwo(value) {
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value * 100) / 100;
+}
+
+function getPreferredWeightUnit(state) {
+  const preferences = getUserPreferences(state);
+  return preferences.weightUnit === "lb" ? "lb" : "kg";
+}
+
+function setWeightInputUnit(unit, shouldConvertValue = true) {
+  const normalized = (unit === "lb") ? "lb" : "kg";
+  const hiddenUnitInput = document.getElementById("weight-input-unit");
+  const input = document.getElementById("weight-input");
+  if (!hiddenUnitInput || !input) return;
+
+  const current = (hiddenUnitInput.value === "lb") ? "lb" : "kg";
+  if (current !== normalized && shouldConvertValue) {
+    const value = parseFloat(input.value);
+    if (Number.isFinite(value) && value > 0) {
+      let converted = value;
+      if (current === "kg" && normalized === "lb") {
+        const pounds = kgToLb(value);
+        converted = Number.isFinite(pounds) ? pounds : value;
+      } else if (current === "lb" && normalized === "kg") {
+        converted = value * 0.45359237;
+      }
+      input.value = String(roundToTwo(converted));
+    }
+  }
+
+  hiddenUnitInput.value = normalized;
+  weightInputUnit = normalized;
+  setWeightModalMode(!!editingWeightId);
 }
 
 function desktopWeightRowHtml(weight) {
   const id = escapeHtml(weight.id);
+  const formattedWeight = `${formatWeightNumber(weight.weight)} ${weight.unit}`;
   return '<tr class="apple-table-row">'
     + `<td class="apple-table-cell">${escapeHtml(formatDate(weight.timestamp))}</td>`
     + `<td class="apple-table-cell apple-table-cell-muted">${escapeHtml(formatTime(weight.timestamp))}</td>`
-    + `<td class="apple-table-cell apple-table-cell-strong apple-table-cell-right">${escapeHtml(`${weight.weight} ${weight.unit}`)}</td>`
+    + `<td class="apple-table-cell apple-table-cell-strong apple-table-cell-right">${escapeHtml(formattedWeight)}</td>`
     + '<td class="apple-table-cell apple-table-cell-right weight-actions-cell">'
     + `<button type="button" class="weight-kebab-trigger" aria-label="Open actions menu" aria-haspopup="menu" aria-expanded="false" data-weight-menu-toggle="${id}">`
     + ICONS.KEBAB
@@ -329,6 +417,7 @@ function desktopWeightRowHtml(weight) {
 
 function mobileWeightRowHtml(weight) {
   const id = escapeHtml(weight.id);
+  const formattedWeight = `${formatWeightNumber(weight.weight)} ${weight.unit}`;
   return `<article class="weight-swipe-row" data-weight-id="${id}">`
     + '<div class="weight-pill-actions">'
     + `<button type="button" class="weight-pill-btn edit" aria-label="Edit weight" data-weight-action="edit" data-weight-id="${id}">${ICONS.EDIT}</button>`
@@ -336,7 +425,7 @@ function mobileWeightRowHtml(weight) {
     + "</div>"
     + '<div class="weight-row-content">'
     + '<div class="weight-row-main">'
-    + `<p class="weight-row-weight">${escapeHtml(`${weight.weight} ${weight.unit}`)}</p>`
+    + `<p class="weight-row-weight">${escapeHtml(formattedWeight)}</p>`
     + `<p class="weight-row-meta">${escapeHtml(`${formatDate(weight.timestamp)} · ${formatTime(weight.timestamp)}`)}</p>`
     + "</div>"
     + `<div class="weight-row-relative">${escapeHtml(relativeTime(weight.timestamp))}</div>`
@@ -692,14 +781,19 @@ function initWeightSwipeRows(list) {
 
 function setLatestState(state) {
   latestState = state || loadState();
+  if (!editingWeightId) {
+    weightInputUnit = getPreferredWeightUnit(latestState);
+  }
 }
 
 export function openWeightModal(weightId) {
   const modal = document.getElementById("weight-modal");
   const input = document.getElementById("weight-input");
-  if (!modal || !input) return;
+  const unitInput = document.getElementById("weight-input-unit");
+  if (!modal || !input || !unitInput) return;
 
   const isEdit = (typeof weightId === "string" && weightId.length > 0);
+  const preferredUnit = getPreferredWeightUnit(latestState || loadState());
   let entry = null;
 
   if (isEdit) {
@@ -712,7 +806,9 @@ export function openWeightModal(weightId) {
 
   if (isEdit) {
     editingWeightId = entry.id;
-    input.value = entry.weight;
+    setWeightInputUnit(preferredUnit, false);
+    const displayWeight = (preferredUnit === "lb") ? kgToLb(entry.weight) : entry.weight;
+    input.value = formatWeightNumber(displayWeight || entry.weight);
     const shouldSelectOnFocus = !isMobileWeightUI();
     setWeightModalMode(true);
     modal.classList.remove("hidden");
@@ -726,6 +822,7 @@ export function openWeightModal(weightId) {
   }
 
   editingWeightId = null;
+  setWeightInputUnit(preferredUnit, false);
   setWeightModalMode(false);
   modal.classList.remove("hidden");
   modal.classList.remove("is-closing");
@@ -871,15 +968,24 @@ export function handleWeightAction(action, weightId) {
 export function handleWeightSubmit(event) {
   if (event) event.preventDefault();
   const input = document.getElementById("weight-input");
-  if (!input) return;
+  const unitInput = document.getElementById("weight-input-unit");
+  if (!input || !unitInput) return;
 
   const value = parseFloat(input.value);
   if (!Number.isFinite(value) || value <= 0) return;
+  const unit = (unitInput.value === "lb") ? "lb" : "kg";
+
+  const beforeSummary = calculateMaintenanceFromState(loadState());
 
   if (editingWeightId) {
-    if (!updateWeight(editingWeightId, value)) return;
+    if (!updateWeight(editingWeightId, value, unit)) return;
   } else {
-    addWeight(value);
+    addWeight(value, unit);
+  }
+
+  const afterSummary = calculateMaintenanceFromState(loadState());
+  if (beforeSummary && afterSummary && beforeSummary.maintenanceRounded !== afterSummary.maintenanceRounded) {
+    showCalorieUpdateToast();
   }
 
   closeWeightModal();
@@ -925,10 +1031,12 @@ export function resetViewUiState() {
   clearDeleteSheetTransitionWatcher();
   editingWeightId = null;
   pendingDeleteWeightId = null;
+  weightInputUnit = "kg";
   closeDesktopMenu();
   closeOpenSwipeRow();
   unlockWeightModalScrollNow();
   setDeleteSheetOpenState(false);
+  hideCalorieToast();
 }
 
 export function handleDocumentClick(event) {
@@ -995,6 +1103,7 @@ export function render(state) {
     return;
   }
 
+  setWeightInputUnit(weightInputUnit, false);
   bindChartControls();
   renderWeightsTrendChart(latestState.chartSeries);
 
