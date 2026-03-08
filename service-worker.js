@@ -1,4 +1,4 @@
-var CACHE_NAME = "maxmode-v17";
+var CACHE_NAME = "maxmode-v18";
 
 var PRECACHE_URLS = [
   "/",

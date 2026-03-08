@@ -191,6 +191,15 @@ function syncNavActiveState() {
   queueNavIndicatorSync();
 }
 
+function syncConnectivityIndicator() {
+  const indicator = document.getElementById("offline-indicator");
+  if (!indicator) return;
+
+  const isOffline = (typeof navigator.onLine === "boolean") ? !navigator.onLine : false;
+  indicator.classList.toggle("is-visible", isOffline);
+  indicator.setAttribute("aria-hidden", isOffline ? "false" : "true");
+}
+
 function readSidebarState() {
   try {
     return window.localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "1";
@@ -344,6 +353,8 @@ function bindGlobalEvents() {
   globalEventsBound = true;
 
   bindWeightChartThemeEvents(() => queueRender());
+  window.addEventListener("online", syncConnectivityIndicator, { passive: true });
+  window.addEventListener("offline", syncConnectivityIndicator, { passive: true });
 
   document.addEventListener("click", (event) => {
     const target = event.target;
@@ -447,6 +458,7 @@ function onPageLoad() {
   initSidebarState();
   resetAllViewUiState();
   bindGlobalEvents();
+  syncConnectivityIndicator();
   renderActiveView();
 }
 

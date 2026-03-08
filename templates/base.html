@@ -51,7 +51,18 @@
     <div class="app-nav-inner">
       <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
          class="app-logo">
-        MaxMode
+        <span class="app-logo-text">MaxMode</span>
+        <span id="offline-indicator"
+              class="app-logo-offline-indicator"
+              aria-hidden="true"
+              title="Offline mode">
+          <svg class="app-logo-offline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17H7A5 5 0 0 1 7 7"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7h2a5 5 0 0 1 4 8"/>
+            <line x1="8" x2="12" y1="12" y2="12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
+            <line x1="2" x2="22" y1="2" y2="22" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
+          </svg>
+        </span>
       </a>
       <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
          class="app-nav-avatar-link" aria-label="Profile">

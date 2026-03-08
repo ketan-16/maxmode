@@ -517,11 +517,46 @@ html.no-view-transition .htmx-settling {
 }
 
 .app-logo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   font-family: var(--font-display);
   font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--apple-accent);
+}
+
+.app-logo-offline-indicator {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.8rem;
+  color: var(--apple-secondary-label);
+  display: inline-flex;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, -3px, 0) scale(0.82);
+  transform-origin: center;
+  will-change: opacity, transform;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized),
+    visibility 0s linear var(--motion-duration-base);
+}
+
+.app-logo-offline-indicator.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition-delay: 0s, 0s, 0s;
+}
+
+.app-logo-offline-icon {
+  width: 0.86rem;
+  height: 0.86rem;
+  stroke-width: 2.2;
 }
 
 .app-nav-avatar-link {
@@ -846,7 +881,7 @@ html.no-view-transition .htmx-settling {
   position: relative;
   z-index: 1;
   min-height: 3.3rem;
-  border-radius: calc(var(--apple-radius-control) - 1px);
+  border-radius: var(--apple-radius-pill);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -916,7 +951,7 @@ html.no-view-transition .htmx-settling {
 }
 
 .app-bottom-indicator {
-  border-radius: calc(var(--apple-radius-control) - 1px);
+  border-radius: var(--apple-radius-pill);
 }
 
 .app-main {
@@ -1585,10 +1620,11 @@ html.no-view-transition .htmx-settling {
 .apple-modal-profile-activity {
   width: min(34rem, calc(100% - 2rem));
   max-height: min(90vh, 46rem);
-  overflow: auto;
+  overflow: hidden;
   transform: translateY(var(--motion-distance-modal)) scale(var(--motion-scale-enter));
   opacity: 0;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.9rem;
   transition:
     transform var(--motion-duration-modal) var(--motion-ease-emphasized),
@@ -1788,6 +1824,19 @@ html.no-view-transition .htmx-settling {
 .activity-option-list {
   display: grid;
   gap: 0.58rem;
+}
+
+#calorie-activity-options.activity-option-list,
+#profile-activity-options.activity-option-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 0.12rem;
+}
+
+#calorie-activity-options.activity-option-list {
+  max-height: min(42vh, 20rem);
 }
 
 .activity-option-card {
@@ -2076,6 +2125,10 @@ html.no-view-transition .htmx-settling {
   width: 1rem;
   height: 1rem;
   fill: currentColor;
+}
+
+.apple-icon[fill="none"] {
+  fill: none;
 }
 
 .apple-icon-sm {
@@ -2662,8 +2715,23 @@ html.no-view-transition .htmx-settling {
 }
 
 @media (max-width: 640px) {
+  .app-overlay-calories {
+    align-items: flex-start;
+    padding-top: calc(3.5rem + env(safe-area-inset-top) + 0.7rem);
+    padding-right: 0.72rem;
+    padding-left: 0.72rem;
+    padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.72rem);
+  }
+
   .apple-modal-calories {
-    width: min(26rem, calc(100% - 1rem));
+    width: min(26rem, 100%);
+    max-height: 100%;
+    padding: 1rem;
+  }
+
+  .apple-modal-profile-activity {
+    width: min(26rem, 100%);
+    max-height: 100%;
     padding: 1rem;
   }
 
