@@ -31,6 +31,11 @@ async def weights(request: Request):
     return _page_response(request, "weights.html", "partials/weights_content.html")
 
 
+@app.get("/calories")
+async def calories(request: Request):
+    return _page_response(request, "calories.html", "partials/calories_content.html")
+
+
 @app.get("/profile")
 async def profile(request: Request):
     return _page_response(request, "profile.html", "partials/profile_content.html")

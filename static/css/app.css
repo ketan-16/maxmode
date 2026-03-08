@@ -26,6 +26,10 @@
   --motion-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --page-transition-ease: var(--motion-ease-standard);
+  --desktop-sidebar-open-width: 17.25rem;
+  --desktop-shell-extra-inline: 0.75rem;
+  --desktop-shell-max-width: calc(var(--apple-max-content-width) + var(--desktop-sidebar-open-width) + var(--desktop-shell-extra-inline));
+  --desktop-main-inline-padding: 1.4rem;
   color-scheme: light dark;
 }
 
@@ -342,8 +346,10 @@ a {
 
 .app-nav,
 .app-logo,
-.app-nav-link,
 .app-nav-avatar-link,
+.app-sidebar-link,
+.app-bottom-link,
+.app-sidebar-toggle,
 .apple-btn,
 .apple-icon-btn,
 .weight-swipe-row,
@@ -403,6 +409,23 @@ html.no-view-transition .htmx-settling {
     view-transition-name: page-content;
   }
 
+  html.has-view-transition .app-nav {
+    view-transition-name: top-nav;
+  }
+
+  html.has-view-transition .app-bottom-nav {
+    view-transition-name: bottom-nav;
+  }
+
+  ::view-transition-group(page-content) {
+    z-index: 10;
+  }
+
+  ::view-transition-group(top-nav),
+  ::view-transition-group(bottom-nav) {
+    z-index: 60;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     ::view-transition-old(page-content) {
       animation: page-content-out var(--motion-duration-page-out) var(--motion-ease-standard) both;
@@ -410,6 +433,16 @@ html.no-view-transition .htmx-settling {
 
     ::view-transition-new(page-content) {
       animation: page-content-in var(--motion-duration-page-in) var(--motion-ease-standard) both;
+    }
+
+    ::view-transition-old(top-nav),
+    ::view-transition-old(bottom-nav) {
+      animation: nav-chrome-out var(--motion-duration-fast) linear both;
+    }
+
+    ::view-transition-new(top-nav),
+    ::view-transition-new(bottom-nav) {
+      animation: nav-chrome-in var(--motion-duration-fast) linear both;
     }
   }
 }
@@ -438,6 +471,26 @@ html.no-view-transition .htmx-settling {
   }
 }
 
+@keyframes nav-chrome-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes nav-chrome-in {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .app-nav {
   position: sticky;
   top: 0;
@@ -449,7 +502,7 @@ html.no-view-transition .htmx-settling {
 }
 
 .app-nav-inner {
-  max-width: var(--apple-max-content-width);
+  max-width: var(--desktop-shell-max-width);
   margin: 0 auto;
   padding: 0 1rem;
   min-height: 3.5rem;
@@ -464,26 +517,6 @@ html.no-view-transition .htmx-settling {
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--apple-accent);
-}
-
-.app-nav-links {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-.app-nav-link {
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--apple-secondary-label);
-  transition: color var(--motion-duration-base) var(--motion-ease-standard);
-}
-
-.app-nav-link:hover,
-.app-nav-link:focus-visible {
-  color: var(--apple-accent);
-  outline: none;
 }
 
 .app-nav-avatar-link {
@@ -505,10 +538,388 @@ html.no-view-transition .htmx-settling {
   object-fit: cover;
 }
 
+.app-shell {
+  --sidebar-collapse-duration: var(--motion-duration-slow);
+  --sidebar-collapse-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --sidebar-open-width: var(--desktop-sidebar-open-width);
+  --sidebar-collapsed-width: 5.15rem;
+  --sidebar-collapsed-panel-width: 3.9rem;
+  --sidebar-row-height: 2.5rem;
+  --sidebar-collapsed-box-size: 2.75rem;
+  --sidebar-collapsed-gap: 0.3rem;
+  --sidebar-header-gap: 0.34rem;
+  --sidebar-link-gap: 0.12rem;
+  --sidebar-indicator-inset-open: 0.2rem;
+  --sidebar-inner-pad-top: 0.62rem;
+  --sidebar-inner-pad-left: 0.55rem;
+  --sidebar-inner-pad-right: 0.55rem;
+  --sidebar-panel-radius: 1rem;
+  --sidebar-panel-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  --sidebar-panel-inset-y: 1.25rem;
+  --sidebar-panel-inset-left: var(--desktop-main-inline-padding);
+  min-height: calc(100vh - 3.5rem);
+}
+
+.app-nav-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+  stroke-width: 1.9;
+}
+
+.app-sidebar {
+  display: none;
+}
+
+.app-sidebar-inner {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  row-gap: var(--sidebar-header-gap);
+  padding: var(--sidebar-inner-pad-top) var(--sidebar-inner-pad-right) var(--sidebar-inner-pad-top) var(--sidebar-inner-pad-left);
+  border: 0.5px solid var(--apple-separator);
+  border-radius: var(--sidebar-panel-radius);
+  background: var(--apple-nav-bg);
+  box-shadow: var(--sidebar-panel-shadow);
+  backdrop-filter: blur(34px) saturate(170%);
+  -webkit-backdrop-filter: blur(34px) saturate(170%);
+  position: relative;
+}
+
+.app-sidebar-topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-height: var(--sidebar-row-height);
+  margin: 0;
+}
+
+.apple-icon-btn.app-sidebar-toggle {
+  position: relative;
+  margin: 0 0 0 auto;
+  width: var(--sidebar-row-height);
+  height: var(--sidebar-row-height);
+  border: 0;
+  border-radius: 0.62rem;
+  background: transparent;
+  color: var(--apple-secondary-label);
+  transition:
+    width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    height var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    border-radius var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.apple-icon-btn.app-sidebar-toggle:hover,
+.apple-icon-btn.app-sidebar-toggle:focus-visible {
+  background: transparent;
+  color: var(--apple-label);
+  opacity: 0.96;
+}
+
+.apple-icon-btn.app-sidebar-toggle:active {
+  background: transparent;
+}
+
+.app-sidebar-toggle-icon {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 1.8;
+  transition: none;
+}
+
+.app-sidebar-content {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+.app-sidebar-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-sidebar-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-sidebar-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.app-sidebar-nav {
+  position: relative;
+  --sidebar-indicator-inset: var(--sidebar-indicator-inset-open);
+  display: grid;
+  gap: var(--sidebar-link-gap);
+  padding: 0;
+  align-content: start;
+  overflow: hidden;
+}
+
+.app-sidebar-section-label {
+  margin: 0 0 0 0.3rem;
+  max-width: 10rem;
+  font-size: 0.66rem;
+  line-height: 1;
+  font-weight: 620;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--apple-tertiary-label);
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    opacity var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    max-width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    margin var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    transform var(--sidebar-collapse-duration) var(--sidebar-collapse-ease);
+}
+
+.app-sidebar-link {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: var(--sidebar-row-height);
+  line-height: var(--sidebar-row-height);
+  border-radius: 0.62rem;
+  padding: 0;
+  font-size: 0.83rem;
+  font-weight: 530;
+  letter-spacing: 0;
+  color: var(--apple-secondary-label);
+  transition:
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    height var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    line-height var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    border-radius var(--sidebar-collapse-duration) var(--sidebar-collapse-ease);
+}
+
+.app-sidebar-link .app-nav-icon {
+  position: absolute;
+  left: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.02rem;
+  height: 1.02rem;
+  stroke-width: 1.9;
+  color: var(--apple-tertiary-label);
+  transition:
+    left var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    transform var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    height var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.app-sidebar-link-label {
+  display: block;
+  margin-left: 2.22rem;
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transition:
+    opacity var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    max-width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease);
+}
+
+.app-sidebar-link:hover,
+.app-sidebar-link:focus-visible {
+  color: var(--apple-label);
+  background: var(--apple-fill-hover);
+  outline: none;
+}
+
+.app-sidebar-link.is-active {
+  color: var(--apple-label);
+  background: transparent;
+}
+
+.app-sidebar-link:hover .app-nav-icon,
+.app-sidebar-link:focus-visible .app-nav-icon {
+  color: var(--apple-secondary-label);
+}
+
+.app-sidebar-link.is-active .app-nav-icon {
+  color: var(--chart-line-strong);
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-nav {
+  --sidebar-indicator-inset: 0;
+  justify-items: center;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-toggle {
+  margin: 0;
+  width: var(--sidebar-collapsed-box-size);
+  height: var(--sidebar-collapsed-box-size);
+  border-radius: 0.68rem;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-topbar {
+  justify-content: center;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-link {
+  width: var(--sidebar-collapsed-box-size);
+  height: var(--sidebar-collapsed-box-size);
+  line-height: var(--sidebar-collapsed-box-size);
+  border-radius: 0.68rem;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-link .app-nav-icon {
+  left: 50%;
+  width: 1.12rem;
+  height: 1.12rem;
+  transform: translate(-50%, -50%);
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-link-label {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-section-label {
+  opacity: 0;
+  max-width: 0;
+  margin: 0;
+  transform: translateX(-4px);
+  pointer-events: none;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-content::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-toggle-icon {
+  width: 1.12rem;
+  height: 1.12rem;
+}
+
+.app-shell.is-sidebar-collapsed {
+  --sidebar-header-gap: var(--sidebar-collapsed-gap);
+  --sidebar-link-gap: var(--sidebar-collapsed-gap);
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-inner {
+  width: 100%;
+  margin-left: 0;
+}
+
+.app-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  border-top: 1px solid var(--apple-separator);
+  background: var(--apple-nav-bg);
+  backdrop-filter: blur(var(--apple-nav-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--apple-nav-blur)) saturate(180%);
+  padding: 0.45rem 0.9rem calc(0.45rem + env(safe-area-inset-bottom));
+}
+
+.app-bottom-nav-inner {
+  position: relative;
+  max-width: var(--apple-max-content-width);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.app-bottom-link {
+  position: relative;
+  z-index: 1;
+  min-height: 3.3rem;
+  border-radius: calc(var(--apple-radius-control) - 1px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  color: var(--apple-secondary-label);
+  transition:
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.app-bottom-link:hover,
+.app-bottom-link:focus-visible {
+  color: var(--apple-label);
+  background: var(--apple-fill);
+  outline: none;
+}
+
+.app-bottom-link.is-active {
+  color: var(--apple-label);
+  background: transparent;
+}
+
+.app-nav-indicator {
+  position: absolute;
+  left: 0;
+  right: auto;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-radius: calc(var(--apple-radius-control) - 2px);
+  background: var(--apple-fill-active);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    height var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    left var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    right var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    opacity var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.app-nav-indicator.is-visible {
+  opacity: 1;
+}
+
+.app-sidebar-indicator {
+  left: var(--sidebar-indicator-inset);
+  right: var(--sidebar-indicator-inset);
+  width: auto;
+  background: var(--apple-fill-active);
+  border-radius: 0.62rem;
+  box-shadow: none;
+}
+
+.app-shell.is-sidebar-collapsed .app-sidebar-indicator {
+  left: 0;
+  right: auto;
+  width: var(--sidebar-collapsed-box-size);
+  border-radius: 0.68rem;
+}
+
+.app-bottom-indicator {
+  border-radius: calc(var(--apple-radius-control) - 1px);
+}
+
 .app-main {
   max-width: var(--apple-max-content-width);
   margin: 0 auto;
-  padding: 2rem 1rem 2.75rem;
+  padding: 2rem 1rem calc(5.25rem + env(safe-area-inset-bottom));
+  position: relative;
+  overflow: clip;
 }
 
 .app-section {
@@ -525,6 +936,11 @@ html.no-view-transition .htmx-settling {
 
 .app-section-action {
   margin-top: 1.5rem;
+}
+
+.calories-placeholder-card {
+  display: grid;
+  gap: 0.4rem;
 }
 
 .apple-title {
@@ -1161,7 +1577,8 @@ html.no-view-transition .htmx-settling {
 .apple-btn:focus-visible,
 .apple-input:focus-visible,
 .apple-icon-btn:focus-visible,
-.app-nav-link:focus-visible {
+.app-sidebar-link:focus-visible,
+.app-bottom-link:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--apple-focus-ring);
 }
@@ -1824,12 +2241,60 @@ html.no-view-transition .htmx-settling {
 }
 
 @media (min-width: 768px) {
-  .app-main {
-    padding: 2.4rem 1.4rem 3.1rem;
+  html {
+    scrollbar-gutter: stable both-edges;
   }
 
-  .app-nav-links {
-    gap: 1.4rem;
+  .app-sidebar-toggle {
+    display: none;
+  }
+
+  .app-sidebar-topbar {
+    justify-content: flex-start;
+  }
+
+  .app-shell {
+    max-width: var(--desktop-shell-max-width);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: var(--sidebar-open-width) minmax(0, 1fr);
+    transition: grid-template-columns var(--sidebar-collapse-duration) var(--sidebar-collapse-ease);
+  }
+
+  .app-shell.is-sidebar-collapsed {
+    grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+  }
+
+  .app-sidebar {
+    display: block;
+    position: sticky;
+    top: calc(3.5rem + var(--sidebar-panel-inset-y));
+    align-self: start;
+    height: calc(100vh - 3.5rem - (var(--sidebar-panel-inset-y) * 2));
+    padding: 0 0 0 var(--sidebar-panel-inset-left);
+    border-right: none;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .app-shell.is-sidebar-collapsed .app-sidebar {
+    padding-left: calc(var(--sidebar-collapsed-width) - var(--sidebar-collapsed-panel-width));
+    padding-right: 0;
+  }
+
+  .app-sidebar-inner {
+    align-content: stretch;
+  }
+
+  .app-bottom-nav {
+    display: none;
+  }
+
+  .app-main {
+    width: 100%;
+    margin: 0 auto;
+    padding: 2.4rem var(--desktop-main-inline-padding) 3.1rem;
   }
 }
 
@@ -1903,6 +2368,10 @@ html.no-view-transition .htmx-settling {
 
   ::view-transition-old(page-content),
   ::view-transition-new(page-content),
+  ::view-transition-old(top-nav),
+  ::view-transition-new(top-nav),
+  ::view-transition-old(bottom-nav),
+  ::view-transition-new(bottom-nav),
   #main-content,
   #weight-modal,
   #weight-modal .apple-modal-weight,
@@ -1918,7 +2387,13 @@ html.no-view-transition .htmx-settling {
   .weight-sheet-btn,
   .apple-btn,
   .apple-icon-btn,
-  .app-nav-link {
+  .app-shell,
+  .app-sidebar-toggle-icon,
+  .app-sidebar-link,
+  .app-sidebar-link-label,
+  .app-sidebar-section-label,
+  .app-bottom-link,
+  .app-nav-indicator {
     animation: none !important;
     transition-duration: var(--motion-duration-instant) !important;
     animation-duration: var(--motion-duration-instant) !important;

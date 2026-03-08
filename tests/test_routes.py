@@ -44,6 +44,16 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.template.name, "partials/weights_content.html")
         self.assertEqual(response.headers.get("vary"), "HX-Request")
 
+    async def test_calories_full_page_response(self):
+        response = await main.calories(make_request("/calories"))
+        self.assertEqual(response.template.name, "calories.html")
+        self.assertEqual(response.headers.get("vary"), "HX-Request")
+
+    async def test_calories_partial_for_hx_request(self):
+        response = await main.calories(make_request("/calories", hx=True))
+        self.assertEqual(response.template.name, "partials/calories_content.html")
+        self.assertEqual(response.headers.get("vary"), "HX-Request")
+
     async def test_profile_partial_for_hx_request(self):
         response = await main.profile(make_request("/profile", hx=True))
         self.assertEqual(response.template.name, "partials/profile_content.html")
@@ -53,6 +63,7 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         for path, handler in (
             ("/", main.dashboard),
             ("/weights", main.weights),
+            ("/calories", main.calories),
             ("/profile", main.profile),
         ):
             with self.subTest(path=path):

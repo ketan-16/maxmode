@@ -23,6 +23,206 @@ import {
 
 let globalEventsBound = false;
 let renderFrame = null;
+let navIndicatorFrame = null;
+let sidebarIndicatorTrackFrame = null;
+let sidebarIndicatorTrackUntil = 0;
+let sidebarCollapsed = false;
+
+const SIDEBAR_COLLAPSE_KEY = "maxmode_sidebar_collapsed";
+
+function normalizePath(path) {
+  if (!path || path === "/") return "/";
+  return path.endsWith("/") ? path.slice(0, -1) : path;
+}
+
+function getCurrentPath() {
+  return normalizePath(window.location.pathname || "/");
+}
+
+function parseCssPixels(rawValue, fallback) {
+  const parsed = Number.parseFloat(rawValue);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseCssDuration(rawValue, fallback) {
+  if (!rawValue || typeof rawValue !== "string") return fallback;
+
+  const value = rawValue.trim();
+  if (!value) return fallback;
+
+  if (value.endsWith("ms")) {
+    const parsedMs = Number.parseFloat(value.slice(0, -2));
+    return Number.isFinite(parsedMs) ? parsedMs : fallback;
+  }
+
+  if (value.endsWith("s")) {
+    const parsedSeconds = Number.parseFloat(value.slice(0, -1));
+    return Number.isFinite(parsedSeconds) ? parsedSeconds * 1000 : fallback;
+  }
+
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getSidebarCollapseDuration() {
+  const shell = document.getElementById("app-shell");
+  if (!shell) return 240;
+
+  const styles = window.getComputedStyle(shell);
+  return parseCssDuration(styles.getPropertyValue("--sidebar-collapse-duration"), 240);
+}
+
+function trackSidebarIndicatorDuringCollapse() {
+  sidebarIndicatorTrackUntil = Math.max(
+    sidebarIndicatorTrackUntil,
+    performance.now() + getSidebarCollapseDuration() + 80
+  );
+
+  if (sidebarIndicatorTrackFrame !== null) return;
+
+  const step = () => {
+    syncNavIndicators();
+    if (performance.now() < sidebarIndicatorTrackUntil) {
+      sidebarIndicatorTrackFrame = requestAnimationFrame(step);
+      return;
+    }
+
+    sidebarIndicatorTrackFrame = null;
+    queueNavIndicatorSync();
+  };
+
+  sidebarIndicatorTrackFrame = requestAnimationFrame(step);
+}
+
+function syncNavIndicator(containerSelector, indicatorSelector) {
+  const container = document.querySelector(containerSelector);
+  const indicator = document.querySelector(indicatorSelector);
+  if (!container || !indicator) return;
+
+  const activeLink = container.querySelector("[data-nav-path].is-active");
+  if (!activeLink) {
+    indicator.classList.remove("is-visible");
+    indicator.style.width = "";
+    indicator.style.height = "";
+    indicator.style.transform = "";
+    indicator.style.left = "";
+    indicator.style.right = "";
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const linkRect = activeLink.getBoundingClientRect();
+  if (containerRect.width <= 0 || containerRect.height <= 0 || linkRect.width <= 0 || linkRect.height <= 0) {
+    indicator.classList.remove("is-visible");
+    indicator.style.width = "";
+    indicator.style.height = "";
+    indicator.style.transform = "";
+    indicator.style.left = "";
+    indicator.style.right = "";
+    return;
+  }
+
+  let x = linkRect.left - containerRect.left;
+  const y = linkRect.top - containerRect.top;
+  let width = linkRect.width;
+  const mode = indicator.getAttribute("data-indicator-mode");
+  const shell = document.getElementById("app-shell");
+  const isCollapsedSidebarMode = mode === "sidebar-row"
+    && !!(shell && shell.classList.contains("is-sidebar-collapsed"));
+
+  if (mode === "sidebar-row" && !isCollapsedSidebarMode) {
+    const style = window.getComputedStyle(container);
+    const inset = parseCssPixels(style.getPropertyValue("--sidebar-indicator-inset"), 4);
+    x = inset;
+    indicator.style.left = `${inset}px`;
+    indicator.style.right = `${inset}px`;
+    indicator.style.width = "auto";
+  } else {
+    indicator.style.left = "0px";
+    indicator.style.right = "auto";
+    indicator.style.width = `${width}px`;
+  }
+
+  indicator.style.height = `${linkRect.height}px`;
+  indicator.style.transform = `translate3d(${mode === "sidebar-row" && !isCollapsedSidebarMode ? 0 : x}px, ${y}px, 0)`;
+  indicator.classList.add("is-visible");
+}
+
+function syncNavIndicators() {
+  syncNavIndicator(".app-sidebar-nav", ".app-sidebar-indicator");
+  syncNavIndicator(".app-bottom-nav-inner", ".app-bottom-indicator");
+}
+
+function queueNavIndicatorSync() {
+  if (navIndicatorFrame !== null) return;
+
+  navIndicatorFrame = requestAnimationFrame(() => {
+    navIndicatorFrame = null;
+    syncNavIndicators();
+  });
+}
+
+function syncNavActiveState() {
+  const path = getCurrentPath();
+  const links = document.querySelectorAll("[data-nav-path]");
+  for (let i = 0; i < links.length; i += 1) {
+    const link = links[i];
+    const linkPath = normalizePath(link.getAttribute("data-nav-path"));
+    const isActive = path === linkPath;
+    link.classList.toggle("is-active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
+
+  queueNavIndicatorSync();
+}
+
+function readSidebarState() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "1";
+  } catch (_err) {
+    return false;
+  }
+}
+
+function writeSidebarState(collapsed) {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? "1" : "0");
+  } catch (_err) {
+    // Ignore localStorage write issues.
+  }
+}
+
+function applySidebarState(collapsed) {
+  const shell = document.getElementById("app-shell");
+  if (!shell) return;
+
+  shell.classList.toggle("is-sidebar-collapsed", collapsed);
+
+  const toggle = document.getElementById("sidebar-toggle");
+  if (!toggle) return;
+
+  toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  toggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  applySidebarState(sidebarCollapsed);
+  writeSidebarState(sidebarCollapsed);
+  queueNavIndicatorSync();
+  trackSidebarIndicatorDuringCollapse();
+}
+
+function initSidebarState() {
+  // TODO(maxmode): Re-enable sidebar collapse toggling once alignment behavior is redesigned.
+  sidebarCollapsed = false;
+  writeSidebarState(false);
+  applySidebarState(false);
+}
 
 function detectActiveView() {
   if (document.getElementById("weight-desktop-groups") || document.getElementById("weight-mobile-groups")) {
@@ -33,6 +233,9 @@ function detectActiveView() {
   }
   if (document.getElementById("profile-name")) {
     return "profile";
+  }
+  if (document.getElementById("calories-coming-soon")) {
+    return "calories";
   }
   return "none";
 }
@@ -54,6 +257,7 @@ function renderActiveView() {
 
   applyOnboarding(state);
   renderNavAvatar(state.user);
+  syncNavActiveState();
 
   const activeView = detectActiveView();
 
@@ -132,6 +336,11 @@ function bindGlobalEvents() {
       return;
     }
 
+    if (actionName === "toggle-sidebar") {
+      toggleSidebar();
+      return;
+    }
+
     if (actionName === "retry-offline") {
       window.location.reload();
     }
@@ -159,8 +368,29 @@ function bindGlobalEvents() {
     handleEscape();
   });
 
-  window.addEventListener("resize", () => onViewportChange(), { passive: true });
-  window.addEventListener("orientationchange", () => onViewportChange(), { passive: true });
+  const handleViewportEvents = () => {
+    onViewportChange();
+    queueNavIndicatorSync();
+  };
+  window.addEventListener("resize", handleViewportEvents, { passive: true });
+  window.addEventListener("orientationchange", handleViewportEvents, { passive: true });
+  const shell = document.getElementById("app-shell");
+  if (shell) {
+    shell.addEventListener("transitionrun", (event) => {
+      if (event && event.propertyName === "grid-template-columns") {
+        trackSidebarIndicatorDuringCollapse();
+      }
+    });
+    shell.addEventListener("transitionend", (event) => {
+      if (event && event.propertyName === "grid-template-columns") {
+        queueNavIndicatorSync();
+      }
+    });
+  }
+  window.addEventListener("popstate", () => {
+    syncNavActiveState();
+    queueRender();
+  });
 }
 
 function configureViewTransitions() {
@@ -172,6 +402,7 @@ function configureViewTransitions() {
 
 function onPageLoad() {
   configureViewTransitions();
+  initSidebarState();
   resetViewUiState();
   bindGlobalEvents();
   renderActiveView();
@@ -182,7 +413,13 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
   if (event.detail && event.detail.target && event.detail.target.id === "main-content") {
     resetViewUiState();
     queueRender();
+    queueNavIndicatorSync();
   }
+});
+document.body.addEventListener("htmx:historyRestore", () => {
+  resetViewUiState();
+  queueRender();
+  queueNavIndicatorSync();
 });
 
 window.MaxMode = {

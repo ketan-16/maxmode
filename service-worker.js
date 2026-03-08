@@ -1,8 +1,9 @@
-var CACHE_NAME = "maxmode-v3";
+var CACHE_NAME = "maxmode-v16";
 
 var PRECACHE_URLS = [
   "/",
   "/weights",
+  "/calories",
   "/profile",
   "/offline",
   "/static/css/app.css",

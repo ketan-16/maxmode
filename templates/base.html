@@ -46,37 +46,143 @@
     </div>
   </div>
 
-  <!-- Navbar -->
+  <!-- Top Bar -->
   <nav class="app-nav">
     <div class="app-nav-inner">
       <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
          class="app-logo">
         MaxMode
       </a>
-      <div class="app-nav-links">
-        <a href="/" hx-get="/" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
-           class="app-nav-link">
-          Dashboard
-        </a>
-        <a href="/weights" hx-get="/weights" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
-           class="app-nav-link">
-          Weights
-        </a>
-        <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
-           class="app-nav-avatar-link">
-          <img id="nav-avatar"
-               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect width='36' height='36' rx='18' fill='%23e5e5ea'/%3E%3C/svg%3E"
-               alt="Avatar"
-               class="app-nav-avatar">
-        </a>
-      </div>
+      <a href="/profile" hx-get="/profile" hx-target="#main-content" hx-swap="innerHTML transition:true swap:0ms settle:60ms" hx-push-url="true"
+         class="app-nav-avatar-link" aria-label="Profile">
+        <img id="nav-avatar"
+             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect width='36' height='36' rx='18' fill='%23e5e5ea'/%3E%3C/svg%3E"
+             alt="Avatar"
+             class="app-nav-avatar">
+      </a>
     </div>
   </nav>
 
-  <!-- Main Content -->
-  <main id="main-content" class="app-main">
-    {% block content %}{% endblock %}
-  </main>
+  <div id="app-shell" class="app-shell">
+    <!-- Desktop / Tablet Sidebar -->
+    <aside class="app-sidebar" aria-label="Primary">
+      <div class="app-sidebar-inner">
+        <div class="app-sidebar-topbar">
+          <p class="app-sidebar-section-label">Navigation</p>
+          <button id="sidebar-toggle"
+                  type="button"
+                  data-action="toggle-sidebar"
+                  class="apple-icon-btn app-sidebar-toggle"
+                  aria-label="Collapse sidebar"
+                  aria-expanded="true">
+            <svg class="app-nav-icon app-sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2.2" ry="2.2"></rect>
+              <line x1="9" y1="4.5" x2="9" y2="19.5"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="app-sidebar-content">
+          <nav class="app-sidebar-nav">
+            <div class="app-nav-indicator app-sidebar-indicator" data-indicator-mode="sidebar-row" aria-hidden="true"></div>
+            <a href="/"
+               hx-get="/"
+               hx-target="#main-content"
+               hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+               hx-push-url="true"
+               data-nav-path="/"
+               title="Home"
+               class="app-sidebar-link">
+              <svg class="app-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              </svg>
+              <span class="app-sidebar-link-label">Home</span>
+            </a>
+            <a href="/weights"
+               hx-get="/weights"
+               hx-target="#main-content"
+               hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+               hx-push-url="true"
+               data-nav-path="/weights"
+               title="Weights"
+               class="app-sidebar-link">
+              <svg class="app-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.5 8a2 2 0 0 0-1.906 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.999 15a2.5 2.5 0 0 1 4 0 2.5 2.5 0 0 0 4 0"/>
+                <circle stroke-linecap="round" stroke-linejoin="round" stroke-width="2" cx="12" cy="5" r="3"/>
+              </svg>
+              <span class="app-sidebar-link-label">Weights</span>
+            </a>
+            <a href="/calories"
+               hx-get="/calories"
+               hx-target="#main-content"
+               hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+               hx-push-url="true"
+               data-nav-path="/calories"
+               title="Calories"
+               class="app-sidebar-link">
+              <svg class="app-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/>
+              </svg>
+              <span class="app-sidebar-link-label">Calories</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content" class="app-main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- Mobile Bottom Nav -->
+  <nav class="app-bottom-nav" aria-label="Primary">
+    <div class="app-bottom-nav-inner">
+      <div class="app-nav-indicator app-bottom-indicator" aria-hidden="true"></div>
+      <a href="/weights"
+         hx-get="/weights"
+         hx-target="#main-content"
+         hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+         hx-push-url="true"
+         data-nav-path="/weights"
+         class="app-bottom-link">
+        <svg class="app-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.5 8a2 2 0 0 0-1.906 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.999 15a2.5 2.5 0 0 1 4 0 2.5 2.5 0 0 0 4 0"/>
+          <circle stroke-linecap="round" stroke-linejoin="round" stroke-width="2" cx="12" cy="5" r="3"/>
+        </svg>
+        <span class="app-bottom-link-label">Weights</span>
+      </a>
+      <a href="/"
+         hx-get="/"
+         hx-target="#main-content"
+         hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+         hx-push-url="true"
+         data-nav-path="/"
+         class="app-bottom-link">
+        <svg class="app-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span class="app-bottom-link-label">Home</span>
+      </a>
+      <a href="/calories"
+         hx-get="/calories"
+         hx-target="#main-content"
+         hx-swap="innerHTML transition:true swap:0ms settle:60ms"
+         hx-push-url="true"
+         data-nav-path="/calories"
+         class="app-bottom-link">
+        <svg class="app-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/>
+        </svg>
+        <span class="app-bottom-link-label">Calories</span>
+      </a>
+    </div>
+  </nav>
 
   <!-- Scripts -->
   <script type="module" src="/static/js/bootstrap.mjs"></script>
