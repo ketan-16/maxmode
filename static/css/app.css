@@ -30,6 +30,7 @@
   --desktop-shell-extra-inline: 0.75rem;
   --desktop-shell-max-width: calc(var(--apple-max-content-width) + var(--desktop-sidebar-open-width) + var(--desktop-shell-extra-inline));
   --desktop-main-inline-padding: 1.4rem;
+  --mobile-bottom-nav-height: 5.25rem;
   color-scheme: light dark;
 }
 
@@ -917,9 +918,13 @@ html.no-view-transition .htmx-settling {
 .app-main {
   max-width: var(--apple-max-content-width);
   margin: 0 auto;
-  padding: 2rem 1rem calc(5.25rem + env(safe-area-inset-bottom));
+  padding: 2rem 1rem calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom));
   position: relative;
   overflow: clip;
+}
+
+.app-body.is-delete-sheet-open #main-content {
+  z-index: 70;
 }
 
 .app-section {
@@ -2049,7 +2054,7 @@ html.no-view-transition .htmx-settling {
 .weight-delete-sheet {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 80;
   display: flex;
   align-items: flex-end;
   justify-content: center;

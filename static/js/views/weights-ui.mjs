@@ -53,6 +53,11 @@ export function setRequestRender(fn) {
   requestRender = (typeof fn === "function") ? fn : (() => {});
 }
 
+function setDeleteSheetOpenState(isOpen) {
+  if (!document.body) return;
+  document.body.classList.toggle("is-delete-sheet-open", !!isOpen);
+}
+
 function cssEscape(value) {
   if (window.CSS && typeof window.CSS.escape === "function") {
     return window.CSS.escape(value);
@@ -794,6 +799,7 @@ function openDeleteSheet(weightId) {
   sheet.classList.remove("hidden");
   sheet.classList.remove("is-closing");
   sheet.setAttribute("aria-hidden", "false");
+  setDeleteSheetOpenState(true);
 
   requestAnimationFrame(() => {
     sheet.classList.add("is-open");
@@ -808,10 +814,14 @@ export function closeDeleteSheet(shouldClearPending = true) {
   }
 
   clearDeleteSheetTransitionWatcher();
-  if (!sheet) return;
+  if (!sheet) {
+    setDeleteSheetOpenState(false);
+    return;
+  }
   if (sheet.classList.contains("hidden")) {
     sheet.classList.remove("is-closing");
     sheet.setAttribute("aria-hidden", "true");
+    setDeleteSheetOpenState(false);
     return;
   }
 
@@ -828,6 +838,7 @@ export function closeDeleteSheet(shouldClearPending = true) {
     if (sheet.classList.contains("is-open")) return;
     sheet.classList.remove("is-closing");
     sheet.classList.add("hidden");
+    setDeleteSheetOpenState(false);
   });
 }
 
@@ -917,6 +928,7 @@ export function resetViewUiState() {
   closeDesktopMenu();
   closeOpenSwipeRow();
   unlockWeightModalScrollNow();
+  setDeleteSheetOpenState(false);
 }
 
 export function handleDocumentClick(event) {
