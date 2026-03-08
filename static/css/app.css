@@ -495,7 +495,7 @@ html.no-view-transition .htmx-settling {
   position: sticky;
   top: 0;
   z-index: 40;
-  border-bottom: 1px solid var(--apple-separator);
+  border-bottom: 0;
   background: var(--apple-nav-bg);
   backdrop-filter: blur(var(--apple-nav-blur)) saturate(180%);
   -webkit-backdrop-filter: blur(var(--apple-nav-blur)) saturate(180%);
@@ -578,7 +578,7 @@ html.no-view-transition .htmx-settling {
   grid-template-rows: auto minmax(0, 1fr);
   row-gap: var(--sidebar-header-gap);
   padding: var(--sidebar-inner-pad-top) var(--sidebar-inner-pad-right) var(--sidebar-inner-pad-top) var(--sidebar-inner-pad-left);
-  border: 0.5px solid var(--apple-separator);
+  border: 0;
   border-radius: var(--sidebar-panel-radius);
   background: var(--apple-nav-bg);
   box-shadow: var(--sidebar-panel-shadow);
@@ -821,7 +821,7 @@ html.no-view-transition .htmx-settling {
   right: 0;
   bottom: 0;
   z-index: 45;
-  border-top: 1px solid var(--apple-separator);
+  border-top: 0;
   background: var(--apple-nav-bg);
   backdrop-filter: blur(var(--apple-nav-blur)) saturate(180%);
   -webkit-backdrop-filter: blur(var(--apple-nav-blur)) saturate(180%);
@@ -882,11 +882,11 @@ html.no-view-transition .htmx-settling {
   z-index: 0;
   transform: translate3d(0, 0, 0);
   transition:
-    transform var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
-    width var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
-    height var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
-    left var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
-    right var(--sidebar-collapse-duration) var(--sidebar-collapse-ease),
+    transform var(--sidebar-collapse-duration, var(--motion-duration-slow)) var(--sidebar-collapse-ease, var(--motion-ease-standard)),
+    width var(--sidebar-collapse-duration, var(--motion-duration-slow)) var(--sidebar-collapse-ease, var(--motion-ease-standard)),
+    height var(--sidebar-collapse-duration, var(--motion-duration-slow)) var(--sidebar-collapse-ease, var(--motion-ease-standard)),
+    left var(--sidebar-collapse-duration, var(--motion-duration-slow)) var(--sidebar-collapse-ease, var(--motion-ease-standard)),
+    right var(--sidebar-collapse-duration, var(--motion-duration-slow)) var(--sidebar-collapse-ease, var(--motion-ease-standard)),
     opacity var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
@@ -1011,7 +1011,7 @@ html.no-view-transition .htmx-settling {
 
 .apple-card {
   background: var(--apple-surface);
-  border: 1px solid var(--apple-opaque-separator);
+  border: 0;
   border-radius: var(--apple-radius-card);
   box-shadow: var(--apple-shadow-card);
 }
@@ -1195,7 +1195,7 @@ html.no-view-transition .htmx-settling {
   position: relative;
   margin-top: 0.9rem;
   min-height: 220px;
-  border: 1px solid var(--apple-separator);
+  border: 0;
   border-radius: calc(var(--apple-radius-card) - 4px);
   background: var(--apple-surface-elevated);
   overflow: hidden;
@@ -1462,7 +1462,7 @@ html.no-view-transition .htmx-settling {
 .apple-modal {
   width: min(26rem, calc(100% - 2rem));
   background: var(--apple-surface);
-  border: 1px solid var(--apple-opaque-separator);
+  border: 0;
   border-radius: var(--apple-radius-modal);
   box-shadow: var(--apple-shadow-modal);
   padding: 1.25rem;
@@ -1845,7 +1845,7 @@ html.no-view-transition .htmx-settling {
   gap: 12px;
   padding: 16px 18px;
   background: var(--weight-surface-solid);
-  border: 1px solid var(--weight-border);
+  border: 0;
   border-radius: calc(var(--apple-radius-card) - 2px);
   transform: translate3d(0, 0, 0);
   transition: transform var(--motion-duration-snap) var(--motion-ease-emphasized);
@@ -1854,7 +1854,6 @@ html.no-view-transition .htmx-settling {
 
 .weight-swipe-row.is-open .weight-row-content {
   background: var(--weight-surface-elevated);
-  border-color: var(--weight-open-border);
 }
 
 .weight-row-main {
@@ -1996,7 +1995,7 @@ html.no-view-transition .htmx-settling {
   min-width: 138px;
   padding: 6px;
   border-radius: calc(var(--apple-radius-control) + 2px);
-  border: 1px solid var(--weight-border);
+  border: 0;
   background: var(--weight-surface);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -2090,7 +2089,7 @@ html.no-view-transition .htmx-settling {
   position: relative;
   width: min(420px, 100%);
   border-radius: var(--apple-radius-modal);
-  border: 1px solid var(--weight-border);
+  border: 0;
   background: var(--weight-surface-solid);
   box-shadow: var(--weight-menu-shadow);
   padding: 18px;
@@ -2337,7 +2336,7 @@ html.no-view-transition .htmx-settling {
     width: auto;
     min-width: 0;
     max-width: 100%;
-    border: 1px solid var(--apple-separator);
+    border: 0;
     border-radius: calc(var(--apple-radius-card) - 6px);
     background: var(--apple-fill);
     padding: 0.78rem 0.82rem;
