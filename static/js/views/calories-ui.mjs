@@ -13,6 +13,7 @@ import {
   getCalorieMissingReasons,
   weightToKg
 } from "../modules/calories-utils.mjs";
+import { formatWeightWithUnit, getHeightDisplay } from "../modules/data-utils.mjs";
 
 const STEP_COUNT = 3;
 const SWIPE_THRESHOLD = 56;
@@ -41,16 +42,6 @@ function parseNumber(value) {
 function roundToTwo(value) {
   if (!Number.isFinite(value)) return null;
   return Math.round(value * 100) / 100;
-}
-
-function formatUpToTwo(value) {
-  const rounded = roundToTwo(value);
-  if (rounded === null) return "--";
-  return rounded.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function formatWeightKg(weightKg) {
-  return `${formatUpToTwo(weightKg)} kg`;
 }
 
 function isModalOpen() {
@@ -417,19 +408,19 @@ function applyProfileToForm() {
 
   const height = profile && profile.height ? profile.height : null;
   const heightCm = (height && height.heightCm) ? height.heightCm : null;
-  const imperial = heightCm
-    ? cmToFeetInches(heightCm)
-    : {
-      ft: (height && Number.isFinite(height.ft)) ? height.ft : "",
-      in: (height && Number.isFinite(height.in)) ? height.in : ""
-    };
+  const displayHeight = getHeightDisplay(heightCm, preferences.heightUnit);
 
   ageInput.value = profile && profile.age ? String(profile.age) : "";
   genderInput.value = profile && profile.gender ? profile.gender : "";
 
-  cmInput.value = heightCm ? String(roundToTwo(heightCm)) : "";
-  ftInput.value = (imperial.ft === "" || imperial.ft === null) ? "" : String(imperial.ft);
-  inInput.value = (imperial.in === "" || imperial.in === null) ? "" : String(imperial.in);
+  cmInput.value = (displayHeight.cm && displayHeight.cm > 0) ? String(displayHeight.cm) : "";
+  if (displayHeight.ft !== null && displayHeight.in !== null) {
+    ftInput.value = String(displayHeight.ft);
+    inInput.value = String(displayHeight.in);
+  } else {
+    ftInput.value = (height && Number.isFinite(height.ft)) ? String(height.ft) : "";
+    inInput.value = (height && Number.isFinite(height.in)) ? String(height.in) : "";
+  }
 
   updateActivitySelection(profile && profile.activityLevel ? profile.activityLevel : "");
 
@@ -654,10 +645,11 @@ function updateCards(state) {
   if (summary) {
     maintenanceCard.classList.remove("hidden");
     missingCard.classList.add("hidden");
+    const preferences = getUserPreferences(state);
 
     metric.textContent = `${summary.maintenanceRounded} kcal/day`;
     meta.textContent = `BMR ${Math.round(summary.bmr)} kcal/day × activity multiplier.`;
-    source.textContent = `Using latest logged weight: ${formatWeightKg(summary.weightKg)}.`;
+    source.textContent = `Using latest logged weight: ${formatWeightWithUnit(summary.weightKg, preferences.weightUnit)}.`;
     return;
   }
 

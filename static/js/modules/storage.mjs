@@ -61,42 +61,34 @@ function normalizeHeight(rawHeight) {
   const source = (rawHeight && typeof rawHeight === "object") ? rawHeight : {};
 
   const unit = (source.unit === "ft-in") ? "ft-in" : "cm";
-  const cm = roundToTwo(parsePositiveNumber(source.cm));
+  const cmCandidate = roundToTwo(parsePositiveNumber(source.cm));
   const ft = parseNonNegativeWholeNumber(source.ft);
   const rawInches = parseNonNegativeWholeNumber(source.in);
   const inches = (rawInches !== null && rawInches < 12) ? rawInches : null;
 
   const legacyHeightCm = roundToTwo(parsePositiveNumber(source.heightCm));
-  let heightCm = legacyHeightCm;
+  const fromImperial = (ft !== null && inches !== null)
+    ? feetInchesToCm(ft, inches)
+    : null;
 
-  if (!heightCm && unit === "cm") {
-    heightCm = cm;
-  }
-
-  if (!heightCm && ft !== null && inches !== null) {
-    heightCm = feetInchesToCm(ft, inches);
-  }
-
-  let normalizedCm = cm;
-  if (!normalizedCm && heightCm) {
-    normalizedCm = roundToTwo(heightCm);
-  }
+  const canonicalHeightCmRaw = legacyHeightCm || cmCandidate || fromImperial;
+  const canonicalHeightCm = canonicalHeightCmRaw ? roundToTwo(canonicalHeightCmRaw) : null;
 
   let normalizedFt = ft;
   let normalizedInches = inches;
 
-  if ((normalizedFt === null || normalizedInches === null) && heightCm) {
-    const converted = cmToFeetInches(heightCm);
+  if ((normalizedFt === null || normalizedInches === null) && canonicalHeightCm) {
+    const converted = cmToFeetInches(canonicalHeightCm);
     normalizedFt = converted.ft;
     normalizedInches = converted.in;
   }
 
   return {
     unit,
-    cm: normalizedCm,
+    cm: canonicalHeightCm,
     ft: normalizedFt,
     in: normalizedInches,
-    heightCm: heightCm ? roundToTwo(heightCm) : null
+    heightCm: canonicalHeightCm
   };
 }
 
@@ -372,5 +364,5 @@ export function clearAllData() {
 }
 
 export function avatarUrl(name) {
-  return `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}`;
+  return `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}&size=96`;
 }

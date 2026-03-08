@@ -10,10 +10,9 @@ import {
   cmToFeetInches,
   feetInchesToCm,
   formatActivityLevel,
-  getLatestWeightKg,
-  kgToLb
+  getLatestWeightKg
 } from "../modules/calories-utils.mjs";
-import { formatDate } from "../modules/data-utils.mjs";
+import { formatDate, formatWeightWithUnit, getHeightDisplay } from "../modules/data-utils.mjs";
 
 let latestState = null;
 let activityModalCloseTimer = null;
@@ -34,12 +33,6 @@ function parseNumber(value) {
 function roundToTwo(value) {
   if (!Number.isFinite(value)) return null;
   return Math.round(value * 100) / 100;
-}
-
-function formatUpToTwo(value) {
-  const rounded = roundToTwo(value);
-  if (rounded === null) return "--";
-  return rounded.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function iconForActivity(icon) {
@@ -154,18 +147,7 @@ function renderLatestWeight(state) {
     latestWeightEl.textContent = "--";
     return;
   }
-
-  if (preferences.weightUnit === "lb") {
-    const pounds = kgToLb(latestWeightKg);
-    if (!pounds) {
-      latestWeightEl.textContent = "--";
-      return;
-    }
-    latestWeightEl.textContent = `${formatUpToTwo(pounds)} lb`;
-    return;
-  }
-
-  latestWeightEl.textContent = `${formatUpToTwo(latestWeightKg)} kg`;
+  latestWeightEl.textContent = formatWeightWithUnit(latestWeightKg, preferences.weightUnit);
 }
 
 function populateCalorieForm(profile, preferences) {
@@ -180,22 +162,19 @@ function populateCalorieForm(profile, preferences) {
   const height = profile && profile.height ? profile.height : null;
   const preferredUnit = preferences.heightUnit;
   const heightCm = (height && height.heightCm) ? height.heightCm : null;
+  const displayHeight = getHeightDisplay(heightCm, preferredUnit);
 
   ageInput.value = profile && profile.age ? String(profile.age) : "";
   genderInput.value = profile && profile.gender ? profile.gender : "";
 
-  cmInput.value = heightCm ? String(roundToTwo(heightCm)) : "";
+  cmInput.value = (displayHeight.cm && displayHeight.cm > 0) ? String(displayHeight.cm) : "";
 
-  if (height && Number.isFinite(height.ft) && Number.isFinite(height.in)) {
-    ftInput.value = String(height.ft);
-    inInput.value = String(height.in);
-  } else if (heightCm) {
-    const converted = cmToFeetInches(heightCm);
-    ftInput.value = String(converted.ft);
-    inInput.value = String(converted.in);
+  if (displayHeight.ft !== null && displayHeight.in !== null) {
+    ftInput.value = String(displayHeight.ft);
+    inInput.value = String(displayHeight.in);
   } else {
-    ftInput.value = "";
-    inInput.value = "";
+    ftInput.value = (height && Number.isFinite(height.ft)) ? String(height.ft) : "";
+    inInput.value = (height && Number.isFinite(height.in)) ? String(height.in) : "";
   }
 
   setProfileHeightUnit(preferredUnit);

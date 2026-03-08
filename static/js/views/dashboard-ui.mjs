@@ -1,11 +1,13 @@
 import {
-  buildDashboardTrendNote,
+  buildDashboardTrendNoteFromKg,
   filterWeightSeriesForRange,
-  formatSignedWeightDelta,
-  formatWeightNumber,
+  formatSignedWeightDeltaFromKg,
+  formatWeightWithUnit,
+  mapWeightsToDisplay,
   relativeTimeStrict
 } from "../modules/data-utils.mjs";
 import { renderDashboardWeightChart } from "../modules/charts.mjs";
+import { getUserPreferences } from "../modules/storage.mjs";
 
 let dashboardInsightsExpanded = false;
 
@@ -52,7 +54,11 @@ export function render(state) {
   const trendNoteEl = document.getElementById("dashboard-trend-note");
 
   const series = state && Array.isArray(state.chartSeries) ? state.chartSeries : [];
-  renderDashboardWeightChart(document.getElementById("dashboard-weight-chart"), series);
+  const preferences = getUserPreferences(state);
+  const preferredWeightUnit = preferences.weightUnit;
+  const displaySeries = mapWeightsToDisplay(series, preferredWeightUnit);
+
+  renderDashboardWeightChart(document.getElementById("dashboard-weight-chart"), displaySeries);
 
   if (series.length === 0) {
     valueEl.textContent = "--";
@@ -66,19 +72,18 @@ export function render(state) {
   }
 
   const latest = series[series.length - 1];
-  const latestUnit = latest.unit || "kg";
   const trend7d = filterWeightSeriesForRange(series, "7d");
   const trend30d = filterWeightSeriesForRange(series, "30d");
 
-  const change7d = (trend7d.length > 1) ? (latest.weight - trend7d[0].weight) : null;
-  const change30d = (trend30d.length > 1) ? (latest.weight - trend30d[0].weight) : null;
+  const change7dKg = (trend7d.length > 1) ? (latest.weight - trend7d[0].weight) : null;
+  const change30dKg = (trend30d.length > 1) ? (latest.weight - trend30d[0].weight) : null;
 
-  valueEl.textContent = `${formatWeightNumber(latest.weight)} ${latestUnit}`;
+  valueEl.textContent = formatWeightWithUnit(latest.weight, preferredWeightUnit);
   if (timeEl) {
     timeEl.textContent = relativeTimeStrict(latest.iso);
   }
   if (change30dEl) {
-    change30dEl.textContent = formatSignedWeightDelta(change30d, latestUnit);
+    change30dEl.textContent = formatSignedWeightDeltaFromKg(change30dKg, preferredWeightUnit);
   }
 
   if (avg30dEl) {
@@ -89,12 +94,12 @@ export function render(state) {
       for (let i = 0; i < trend30d.length; i += 1) {
         total30d += trend30d[i].weight;
       }
-      avg30dEl.textContent = `${formatWeightNumber(total30d / trend30d.length)} ${latestUnit}`;
+      avg30dEl.textContent = formatWeightWithUnit(total30d / trend30d.length, preferredWeightUnit);
     }
   }
 
   if (change7dEl) {
-    change7dEl.textContent = formatSignedWeightDelta(change7d, latestUnit);
+    change7dEl.textContent = formatSignedWeightDeltaFromKg(change7dKg, preferredWeightUnit);
   }
 
   if (entriesEl) {
@@ -102,6 +107,6 @@ export function render(state) {
   }
 
   if (trendNoteEl) {
-    trendNoteEl.textContent = buildDashboardTrendNote(change30d, latestUnit);
+    trendNoteEl.textContent = buildDashboardTrendNoteFromKg(change30dKg, preferredWeightUnit);
   }
 }

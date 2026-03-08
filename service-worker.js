@@ -1,4 +1,4 @@
-var CACHE_NAME = "maxmode-v16";
+var CACHE_NAME = "maxmode-v17";
 
 var PRECACHE_URLS = [
   "/",
@@ -28,6 +28,24 @@ function isSameOrigin(requestUrl) {
 
 function isCacheableResponse(response) {
   return !!(response && response.ok && (response.type === "basic" || response.type === "default"));
+}
+
+function isAvatarRequest(requestUrl) {
+  return requestUrl.origin === "https://api.dicebear.com"
+    && requestUrl.pathname.indexOf("/9.x/notionists/svg") === 0;
+}
+
+function isCacheableAvatarResponse(response) {
+  return !!(
+    response
+    && (
+      response.type === "opaque"
+      || response.type === "cors"
+      || response.type === "basic"
+      || response.type === "default"
+    )
+    && (response.ok || response.type === "opaque")
+  );
 }
 
 self.addEventListener("install", function (event) {
@@ -65,7 +83,29 @@ self.addEventListener("fetch", function (event) {
   if (request.headers.get("HX-Request")) return;
 
   var url = new URL(request.url);
-  if (!isSameOrigin(url)) return;
+  var avatarRequest = isAvatarRequest(url);
+  if (!isSameOrigin(url) && !avatarRequest) return;
+
+  if (avatarRequest) {
+    event.respondWith(
+      (async function () {
+        var cachedAvatar = await caches.match(request);
+        if (cachedAvatar) return cachedAvatar;
+
+        try {
+          var avatarResponse = await fetch(request);
+          if (isCacheableAvatarResponse(avatarResponse)) {
+            var avatarCache = await caches.open(CACHE_NAME);
+            avatarCache.put(request, avatarResponse.clone());
+          }
+          return avatarResponse;
+        } catch (_err) {
+          return cachedAvatar || Response.error();
+        }
+      })()
+    );
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(

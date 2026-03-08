@@ -8,11 +8,13 @@ import {
 } from "../modules/storage.mjs";
 import {
   buildWeightLogGroups,
+  convertWeightForDisplay,
   escapeHtml,
   formatDate,
   formatEntryCount,
   formatWeightNumber,
   formatTime,
+  mapWeightsToDisplay,
   relativeTime,
   weightLogHasEntries
 } from "../modules/data-utils.mjs";
@@ -368,6 +370,16 @@ function roundToTwo(value) {
 function getPreferredWeightUnit(state) {
   const preferences = getUserPreferences(state);
   return preferences.weightUnit === "lb" ? "lb" : "kg";
+}
+
+function getDisplayWeightEntries(state) {
+  const source = state && Array.isArray(state.weights) ? state.weights : [];
+  return mapWeightsToDisplay(source, getPreferredWeightUnit(state));
+}
+
+function getDisplayChartSeries(state) {
+  const source = state && Array.isArray(state.chartSeries) ? state.chartSeries : [];
+  return mapWeightsToDisplay(source, getPreferredWeightUnit(state));
 }
 
 function setWeightInputUnit(unit, shouldConvertValue = true) {
@@ -807,8 +819,9 @@ export function openWeightModal(weightId) {
   if (isEdit) {
     editingWeightId = entry.id;
     setWeightInputUnit(preferredUnit, false);
-    const displayWeight = (preferredUnit === "lb") ? kgToLb(entry.weight) : entry.weight;
-    input.value = formatWeightNumber(displayWeight || entry.weight);
+    const converted = convertWeightForDisplay(entry.weight, preferredUnit);
+    const displayWeight = (converted.value !== null) ? converted.value : entry.weight;
+    input.value = formatWeightNumber(displayWeight);
     const shouldSelectOnFocus = !isMobileWeightUI();
     setWeightModalMode(true);
     modal.classList.remove("hidden");
@@ -1001,28 +1014,28 @@ export function onViewportChange() {
     const desktopGroups = document.getElementById("weight-desktop-groups");
     const mobileGroups = document.getElementById("weight-mobile-groups");
     if (!desktopGroups || !mobileGroups) {
-      renderWeightsTrendChart((latestState && latestState.chartSeries) || []);
+      renderWeightsTrendChart(getDisplayChartSeries(latestState));
       return;
     }
 
     const useMobileUi = isMobileWeightUI();
     if (lastWeightUiMode === null) {
       lastWeightUiMode = useMobileUi;
-      renderWeightsTrendChart((latestState && latestState.chartSeries) || []);
+      renderWeightsTrendChart(getDisplayChartSeries(latestState));
       return;
     }
 
     if (useMobileUi !== lastWeightUiMode) {
       requestRender();
     } else {
-      renderWeightsTrendChart((latestState && latestState.chartSeries) || []);
+      renderWeightsTrendChart(getDisplayChartSeries(latestState));
     }
   });
 }
 
 function bindChartControls() {
   bindWeightChartRangeEvents(() => {
-    renderWeightsTrendChart((latestState && latestState.chartSeries) || []);
+    renderWeightsTrendChart(getDisplayChartSeries(latestState));
   });
 }
 
@@ -1105,9 +1118,9 @@ export function render(state) {
 
   setWeightInputUnit(weightInputUnit, false);
   bindChartControls();
-  renderWeightsTrendChart(latestState.chartSeries);
+  renderWeightsTrendChart(getDisplayChartSeries(latestState));
 
-  const groups = buildWeightLogGroups(latestState.weights);
+  const groups = buildWeightLogGroups(getDisplayWeightEntries(latestState));
   const emptyState = document.getElementById("weight-empty-state");
   const desktopContainer = document.getElementById("weight-desktop-groups-container");
   const mobileContainer = document.getElementById("weight-mobile-groups-container");

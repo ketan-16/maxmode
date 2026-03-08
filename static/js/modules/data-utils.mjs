@@ -1,9 +1,137 @@
+import { cmToFeetInches, lbToKg, kgToLb } from "./calories-utils.mjs";
+
 export const WEIGHT_CHART_RANGES = {
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
   "90d": 90 * 24 * 60 * 60 * 1000,
   all: null
 };
+
+function parseFiniteNumber(value) {
+  const parsed = (typeof value === "number") ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function roundToTwo(value) {
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value * 100) / 100;
+}
+
+export function normalizeWeightUnit(unit) {
+  return unit === "lb" ? "lb" : "kg";
+}
+
+export function normalizeHeightUnit(unit) {
+  return unit === "ft-in" ? "ft-in" : "cm";
+}
+
+export function convertWeightForDisplay(weightKg, preferredUnit = "kg") {
+  const parsed = parseFiniteNumber(weightKg);
+  const unit = normalizeWeightUnit(preferredUnit);
+
+  if (parsed === null) {
+    return { value: null, unit };
+  }
+
+  if (unit === "lb") {
+    const pounds = kgToLb(parsed);
+    return {
+      value: Number.isFinite(pounds) ? pounds : null,
+      unit
+    };
+  }
+
+  return { value: parsed, unit };
+}
+
+export function mapWeightsToDisplay(entries, preferredUnit = "kg") {
+  const source = Array.isArray(entries) ? entries : [];
+  const unit = normalizeWeightUnit(preferredUnit);
+  const mapped = new Array(source.length);
+
+  for (let i = 0; i < source.length; i += 1) {
+    const item = source[i];
+    if (!item || typeof item !== "object") {
+      mapped[i] = item;
+      continue;
+    }
+
+    const converted = convertWeightForDisplay(item.weight, unit);
+    mapped[i] = {
+      ...item,
+      weight: (converted.value === null) ? item.weight : converted.value,
+      unit
+    };
+  }
+
+  return mapped;
+}
+
+export function formatWeightWithUnit(weightKg, preferredUnit = "kg") {
+  const converted = convertWeightForDisplay(weightKg, preferredUnit);
+  if (converted.value === null || !Number.isFinite(converted.value)) return "--";
+  return `${formatWeightNumber(converted.value)} ${converted.unit}`;
+}
+
+export function formatSignedWeightDeltaFromKg(valueKg, preferredUnit = "kg") {
+  if (typeof valueKg !== "number" || !Number.isFinite(valueKg)) return "--";
+  const converted = convertWeightForDisplay(valueKg, preferredUnit);
+  return formatSignedWeightDelta(converted.value, converted.unit);
+}
+
+export function buildDashboardTrendNoteFromKg(changeKg, preferredUnit = "kg") {
+  if (typeof changeKg !== "number" || !Number.isFinite(changeKg)) {
+    return "Add one more entry to unlock 30D trend insights.";
+  }
+
+  const converted = convertWeightForDisplay(changeKg, preferredUnit);
+  if (converted.value === null || !Number.isFinite(converted.value)) {
+    return "Add one more entry to unlock 30D trend insights.";
+  }
+
+  if (Math.abs(converted.value) < 0.005) {
+    return "Stable over the last 30 days.";
+  }
+
+  const direction = converted.value > 0 ? "Up" : "Down";
+  return `${direction} ${formatWeightNumber(Math.abs(converted.value))} ${converted.unit} over 30 days.`;
+}
+
+export function getHeightDisplay(heightCm, preferredUnit = "cm") {
+  const parsedCm = parseFiniteNumber(heightCm);
+  const unit = normalizeHeightUnit(preferredUnit);
+
+  if (parsedCm === null || parsedCm <= 0) {
+    return {
+      unit,
+      cm: null,
+      ft: null,
+      in: null,
+      text: "--"
+    };
+  }
+
+  const roundedCm = roundToTwo(parsedCm);
+  const imperial = cmToFeetInches(roundedCm);
+
+  if (unit === "ft-in") {
+    return {
+      unit,
+      cm: roundedCm,
+      ft: imperial.ft,
+      in: imperial.in,
+      text: `${imperial.ft} ft ${imperial.in} in`
+    };
+  }
+
+  return {
+    unit,
+    cm: roundedCm,
+    ft: imperial.ft,
+    in: imperial.in,
+    text: `${formatWeightNumber(roundedCm)} cm`
+  };
+}
 
 function createEntryId() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -24,16 +152,26 @@ export function normalizeWeights(raw, nowIso) {
       continue;
     }
 
-    const parsedWeight = (typeof item.weight === "number") ? item.weight : parseFloat(item.weight);
-    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+    const parsedWeight = parseFiniteNumber(item.weight);
+    if (parsedWeight === null || parsedWeight <= 0) {
+      changed = true;
+      continue;
+    }
+
+    const sourceUnit = normalizeWeightUnit(item.unit);
+    const canonicalWeight = (sourceUnit === "lb")
+      ? roundToTwo(lbToKg(parsedWeight))
+      : roundToTwo(parsedWeight);
+
+    if (!canonicalWeight || !Number.isFinite(canonicalWeight) || canonicalWeight <= 0) {
       changed = true;
       continue;
     }
 
     const normalizedItem = {
       id: (typeof item.id === "string" && item.id.length > 0) ? item.id : createEntryId(),
-      weight: parsedWeight,
-      unit: (typeof item.unit === "string" && item.unit.length > 0) ? item.unit : "kg",
+      weight: canonicalWeight,
+      unit: "kg",
       timestamp: (typeof item.timestamp === "string" && item.timestamp.length > 0) ? item.timestamp : fallbackIso
     };
 

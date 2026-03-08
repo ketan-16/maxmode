@@ -112,3 +112,56 @@ test("weight entries normalize to two decimals when logged in lb", () => {
   assert.equal(state.weights.length, 1);
   assert.equal(state.weights[0].weight, 81.65);
 });
+
+test("legacy lb weight entries auto-migrate to canonical kg in persisted storage", () => {
+  resetStorage();
+
+  localStorage.setItem("maxmode_user", JSON.stringify({
+    name: "Legacy Migrator",
+    createdAt: "2026-01-01T00:00:00.000Z"
+  }));
+
+  localStorage.setItem("maxmode_weights", JSON.stringify([
+    { id: "w1", weight: 180, unit: "lb", timestamp: "2026-01-01T00:00:00.000Z" },
+    { id: "w2", weight: 82, unit: "kg", timestamp: "2026-01-02T00:00:00.000Z" }
+  ]));
+
+  const state = storage.loadState();
+  assert.equal(state.weights[0].weight, 81.65);
+  assert.equal(state.weights[0].unit, "kg");
+  assert.equal(state.weights[1].weight, 82);
+  assert.equal(state.weights[1].unit, "kg");
+
+  const persisted = JSON.parse(localStorage.getItem("maxmode_weights"));
+  assert.equal(persisted[0].weight, 81.65);
+  assert.equal(persisted[0].unit, "kg");
+});
+
+test("height normalization keeps cm synced to canonical heightCm", () => {
+  resetStorage();
+
+  localStorage.setItem("maxmode_user", JSON.stringify({
+    name: "Height Legacy",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    calorieProfile: {
+      age: 30,
+      gender: "male",
+      activityLevel: "moderately-active",
+      height: {
+        unit: "cm",
+        cm: 180,
+        heightCm: 175.26,
+        ft: 5,
+        in: 9
+      }
+    },
+    preferences: {
+      heightUnit: "cm",
+      weightUnit: "kg"
+    }
+  }));
+
+  const state = storage.loadState();
+  assert.equal(state.user.calorieProfile.height.heightCm, 175.26);
+  assert.equal(state.user.calorieProfile.height.cm, 175.26);
+});
