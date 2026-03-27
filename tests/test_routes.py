@@ -34,6 +34,20 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.template.name, "dashboard.html")
         self.assertEqual(response.headers.get("vary"), "HX-Request")
 
+    async def test_dashboard_mobile_bottom_nav_order(self):
+        response = await main.dashboard(make_request("/"))
+        body = response.body.decode("utf-8")
+        bottom_nav_start = body.index('<nav class="app-bottom-nav" aria-label="Primary">')
+        bottom_nav_end = body.index("</nav>", bottom_nav_start)
+        bottom_nav = body[bottom_nav_start:bottom_nav_end]
+
+        calories_index = bottom_nav.index('data-nav-path="/calories"')
+        home_index = bottom_nav.index('data-nav-path="/"')
+        weights_index = bottom_nav.index('data-nav-path="/weights"')
+
+        self.assertLess(calories_index, home_index)
+        self.assertLess(home_index, weights_index)
+
     async def test_dashboard_partial_for_hx_request(self):
         response = await main.dashboard(make_request("/", hx=True))
         self.assertEqual(response.template.name, "partials/dashboard_content.html")

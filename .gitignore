@@ -16,3 +16,6 @@ Thumbs.db
 # Prompting files
 prompt_history.md
 AGENTS.md
+
+# Credentials and configuration files
+.env
