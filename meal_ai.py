@@ -24,7 +24,7 @@ Return JSON only with exactly these keys:
 Rules:
 - Estimate one realistic serving for what is shown or described.
 - If multiple foods are present, combine them into a single meal entry.
-- Keep the name short, natural, and user-friendly.
+- Keep the name as short as possible, natural, and user-friendly.
 - Use whole numbers only.
 - Macros must be non-negative.
 - Calories should roughly match the macro estimate.
@@ -162,7 +162,11 @@ def _normalize_meal_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _build_user_content(note: str, image_bytes: bytes | None, content_type: str | None, mode: str) -> list[dict[str, Any]]:
+def _build_user_content(
+    note: str,
+    image_payloads: list[dict[str, str]],
+    mode: str,
+) -> list[dict[str, Any]]:
     note_copy = note.strip() if isinstance(note, str) else ""
     parts: list[dict[str, Any]] = [{
         "type": "text",
@@ -174,9 +178,11 @@ def _build_user_content(note: str, image_bytes: bytes | None, content_type: str 
         )
     }]
 
-    if image_bytes:
-        media_type = content_type or "image/jpeg"
-        encoded = base64.b64encode(image_bytes).decode("utf-8")
+    for payload in image_payloads:
+        encoded = payload.get("encoded")
+        if not encoded:
+            continue
+        media_type = payload.get("content_type") or "image/jpeg"
         parts.append({
             "type": "image_url",
             "image_url": {
@@ -193,10 +199,18 @@ def analyze_logged_meal(
     note: str = "",
     image_bytes: bytes | None = None,
     content_type: str | None = None,
+    image_payloads: list[dict[str, str]] | None = None,
     mode: str = "manual",
 ) -> dict[str, Any]:
     note_copy = note.strip() if isinstance(note, str) else ""
-    if not note_copy and not image_bytes:
+    normalized_images = list(image_payloads or [])
+    if image_bytes:
+        normalized_images.append({
+            "encoded": base64.b64encode(image_bytes).decode("utf-8"),
+            "content_type": content_type or "image/jpeg"
+        })
+
+    if not note_copy and not normalized_images:
         raise MealAnalysisError("Add a meal description or a photo.")
 
     model = os.getenv("MEAL_AI_MODEL", DEFAULT_MEAL_MODEL).strip() or DEFAULT_MEAL_MODEL
@@ -214,7 +228,7 @@ def analyze_logged_meal(
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": _build_user_content(note_copy, image_bytes, content_type, mode)
+                "content": _build_user_content(note_copy, normalized_images, mode)
             }
         ],
         timeout=45,

@@ -30,6 +30,56 @@ function parseNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeProfileGender(gender) {
+  return (gender === "male" || gender === "female") ? gender : "";
+}
+
+function normalizePreferenceHeightUnit(unit) {
+  return (unit === "ft-in") ? "ft-in" : "cm";
+}
+
+function normalizePreferenceWeightUnit(unit) {
+  return (unit === "lb") ? "lb" : "kg";
+}
+
+function normalizeProfileSegmentValue(inputId, value) {
+  if (inputId === "profile-gender-input") return normalizeProfileGender(value);
+  if (inputId === "profile-pref-height-unit") return normalizePreferenceHeightUnit(value);
+  if (inputId === "profile-pref-weight-unit") return normalizePreferenceWeightUnit(value);
+  return null;
+}
+
+function syncProfileSegmentedControl(inputId) {
+  if (!inputId) return;
+
+  const input = document.getElementById(inputId);
+  const group = document.querySelector(`[data-profile-segment="${inputId}"]`);
+  if (!input || !group) return;
+
+  const options = group.querySelectorAll("[data-profile-segment-value]");
+  let activeIndex = -1;
+  for (let i = 0; i < options.length; i += 1) {
+    const isActive = options[i].getAttribute("data-profile-segment-value") === input.value;
+    options[i].classList.toggle("is-active", isActive);
+    options[i].setAttribute("aria-checked", isActive ? "true" : "false");
+    if (isActive) activeIndex = i;
+  }
+  group.setAttribute("data-active-index", String(activeIndex));
+}
+
+function setProfileSegmentValue(inputId, value) {
+  const input = document.getElementById(inputId);
+  if (!input) return false;
+
+  const normalized = normalizeProfileSegmentValue(inputId, value);
+  if (normalized === null) return false;
+
+  const changed = input.value !== normalized;
+  input.value = normalized;
+  syncProfileSegmentedControl(inputId);
+  return changed;
+}
+
 function roundToTwo(value) {
   if (!Number.isFinite(value)) return null;
   return Math.round(value * 100) / 100;
@@ -165,7 +215,8 @@ function populateCalorieForm(profile, preferences) {
   const displayHeight = getHeightDisplay(heightCm, preferredUnit);
 
   ageInput.value = profile && profile.age ? String(profile.age) : "";
-  genderInput.value = profile && profile.gender ? profile.gender : "";
+  genderInput.value = normalizeProfileGender(profile && profile.gender ? profile.gender : "");
+  syncProfileSegmentedControl("profile-gender-input");
 
   cmInput.value = (displayHeight.cm && displayHeight.cm > 0) ? String(displayHeight.cm) : "";
 
@@ -187,11 +238,13 @@ function renderActivityText(activityLevel) {
 }
 
 function renderPreferences(preferences) {
-  const heightSelect = document.getElementById("profile-pref-height-unit");
-  const weightSelect = document.getElementById("profile-pref-weight-unit");
+  const heightInput = document.getElementById("profile-pref-height-unit");
+  const weightInput = document.getElementById("profile-pref-weight-unit");
 
-  if (heightSelect) heightSelect.value = preferences.heightUnit;
-  if (weightSelect) weightSelect.value = preferences.weightUnit;
+  if (heightInput) heightInput.value = normalizePreferenceHeightUnit(preferences.heightUnit);
+  if (weightInput) weightInput.value = normalizePreferenceWeightUnit(preferences.weightUnit);
+  syncProfileSegmentedControl("profile-pref-height-unit");
+  syncProfileSegmentedControl("profile-pref-weight-unit");
 }
 
 function renderActivityOptions(selectedLevel) {
@@ -339,6 +392,33 @@ function bindProfileEvents() {
       return;
     }
 
+    const segmentedOption = target.closest("[data-profile-segment-value]");
+    if (segmentedOption) {
+      const segmentedGroup = segmentedOption.closest("[data-profile-segment]");
+      const inputId = segmentedGroup ? segmentedGroup.getAttribute("data-profile-segment") : "";
+      const nextValue = segmentedOption.getAttribute("data-profile-segment-value");
+      if (!inputId || nextValue === null) return;
+
+      const changed = setProfileSegmentValue(inputId, nextValue);
+      if (!changed) return;
+
+      if (inputId === "profile-gender-input") {
+        persistProfileFields();
+        return;
+      }
+
+      if (inputId === "profile-pref-height-unit") {
+        persistProfileFields();
+        persistPreferences({ heightUnit: normalizePreferenceHeightUnit(nextValue) });
+        return;
+      }
+
+      if (inputId === "profile-pref-weight-unit") {
+        persistPreferences({ weightUnit: normalizePreferenceWeightUnit(nextValue) });
+      }
+      return;
+    }
+
     const activityModal = document.getElementById("profile-activity-modal");
     if (target === activityModal) {
       closeActivityModal();
@@ -419,6 +499,9 @@ export function render(state) {
   renderPreferences(preferences);
   renderLatestWeight(latestState);
   renderActivityText(user.calorieProfile ? user.calorieProfile.activityLevel : null);
+  syncProfileSegmentedControl("profile-gender-input");
+  syncProfileSegmentedControl("profile-pref-height-unit");
+  syncProfileSegmentedControl("profile-pref-weight-unit");
   bindProfileEvents();
 
   if (!isActivityModalOpen()) {

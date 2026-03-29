@@ -21,15 +21,31 @@ import { escapeHtml, formatTime, getHeightDisplay } from "../modules/data-utils.
 import {
   buildCalorieTrackerSummary,
   clampPortion,
-  getLocalDayKey,
-  scaleMealNutrition
+  getLocalDayKey
 } from "../modules/meal-utils.mjs";
+import { syncRangeInputVisual } from "../modules/slider-ui.mjs";
 
 const STEP_COUNT = 3;
 const SWIPE_THRESHOLD = 56;
 const OVERLAY_CLOSE_MS = 220;
 const TOAST_VISIBLE_MS = 2400;
 const FAB_LONG_PRESS_MS = 420;
+const MAX_MANUAL_PHOTOS = 3;
+const RECENT_FOOD_NAME_LIMIT = 28;
+const MEAL_SWIPE_CONFIG = {
+  SNAP_PX: 52,
+  FULL_FRAC: 0.72,
+  DAMP: 0.48,
+  FLICK_VELOCITY: -0.45,
+  OPEN_EXTRA_PX: 8,
+  MIN_OPEN_PX: 150
+};
+const MEAL_ICONS = {
+  MENU: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"></circle></svg>',
+  EDIT: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="m16.5 3.5 4 4L7 21l-4 1 1-4Z"></path></svg>',
+  CLONE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+  DELETE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="m19 6-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>'
+};
 
 let currentStep = 0;
 let latestState = null;
@@ -39,13 +55,24 @@ let touchStartY = 0;
 let touchTracking = false;
 let toastTimer = null;
 let toastHideTimer = null;
-let manualPhotoFile = null;
+let manualPhotoFiles = [];
 let manualEntryMode = "manual";
 let previewDraft = null;
 let previewMode = "create";
 let fabLongPressTimer = null;
 let fabLongPressHandled = false;
+let fabMenuCloseTimer = null;
 let voiceRecognition = null;
+let pendingDeleteMealId = null;
+let openMealSwipeRow = null;
+let openMealMenuId = null;
+let lastCaloriesUiMode = null;
+let resizeFrame = null;
+let deleteSheetTransitionCleanup = null;
+let calorieOverlayScrollLocked = false;
+let calorieOverlayScrollY = 0;
+let calorieOverlayUnlockTimer = null;
+let calorieOverlayViewportCleanup = null;
 
 function parseNumber(value) {
   const parsed = (typeof value === "number") ? value : parseFloat(value);
@@ -66,6 +93,21 @@ function formatCountLabel(count, singular, plural = null) {
 function formatCalories(value) {
   const normalized = Math.max(0, Math.round(value || 0));
   return normalized.toLocaleString();
+}
+
+function truncateLabel(value, maxChars = RECENT_FOOD_NAME_LIMIT) {
+  const normalized = (typeof value === "string") ? value.trim() : "";
+  if (!normalized || normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxChars)).trimEnd()}...`;
+}
+
+function createManualPhotoId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `photo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function formatMacroProgress(current, target) {
@@ -101,6 +143,350 @@ function clearTimer(timer) {
   }
 }
 
+function cssEscape(value) {
+  if (window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(value);
+  }
+  return String(value).replace(/([\\\"'])/g, "\\$1");
+}
+
+function parseCssTimeMs(rawValue) {
+  if (!rawValue) return 0;
+
+  const value = String(rawValue).trim();
+  if (!value) return 0;
+
+  if (value.slice(-2) === "ms") {
+    const millis = parseFloat(value.slice(0, -2));
+    return Number.isFinite(millis) ? millis : 0;
+  }
+
+  if (value.slice(-1) === "s") {
+    const seconds = parseFloat(value.slice(0, -1));
+    return Number.isFinite(seconds) ? seconds * 1000 : 0;
+  }
+
+  return 0;
+}
+
+function getMaxTransitionMs(element) {
+  if (!element) return 0;
+
+  const style = window.getComputedStyle(element);
+  const durations = String(style.transitionDuration || "").split(",");
+  const delays = String(style.transitionDelay || "").split(",");
+  const total = Math.max(durations.length, delays.length);
+  let maxMs = 0;
+
+  for (let i = 0; i < total; i += 1) {
+    const duration = parseCssTimeMs(durations[i % durations.length]);
+    const delay = parseCssTimeMs(delays[i % delays.length]);
+    if ((duration + delay) > maxMs) {
+      maxMs = duration + delay;
+    }
+  }
+
+  return maxMs;
+}
+
+function onTransitionEndOrTimeout(element, fallbackMs, callback) {
+  if (!element || typeof callback !== "function") {
+    return () => {};
+  }
+
+  let done = false;
+  let timer = null;
+
+  function finish() {
+    if (done) return;
+    done = true;
+    if (timer !== null) {
+      window.clearTimeout(timer);
+    }
+    element.removeEventListener("transitionend", onEnd);
+    callback();
+  }
+
+  function onEnd(event) {
+    if (event.target !== element) return;
+    finish();
+  }
+
+  element.addEventListener("transitionend", onEnd);
+  timer = window.setTimeout(finish, Math.max(24, Math.ceil(fallbackMs)));
+
+  return function cleanup() {
+    if (done) return;
+    done = true;
+    if (timer !== null) {
+      window.clearTimeout(timer);
+    }
+    element.removeEventListener("transitionend", onEnd);
+  };
+}
+
+function setDeleteSheetOpenState(isOpen) {
+  if (!document.body) return;
+  document.body.classList.toggle("is-delete-sheet-open", !!isOpen);
+}
+
+function clearDeleteSheetTransitionWatcher() {
+  if (typeof deleteSheetTransitionCleanup === "function") {
+    const cleanup = deleteSheetTransitionCleanup;
+    deleteSheetTransitionCleanup = null;
+    cleanup();
+  }
+}
+
+function clearCalorieOverlayUnlockWaiters() {
+  if (calorieOverlayUnlockTimer !== null) {
+    window.clearTimeout(calorieOverlayUnlockTimer);
+    calorieOverlayUnlockTimer = null;
+  }
+
+  if (typeof calorieOverlayViewportCleanup === "function") {
+    const cleanup = calorieOverlayViewportCleanup;
+    calorieOverlayViewportCleanup = null;
+    cleanup();
+  }
+}
+
+function lockCalorieOverlayScroll() {
+  clearCalorieOverlayUnlockWaiters();
+  if (calorieOverlayScrollLocked || !document.body) return;
+
+  calorieOverlayScrollY = window.scrollY || window.pageYOffset || 0;
+  document.body.classList.add("modal-scroll-locked");
+  document.body.style.top = `-${calorieOverlayScrollY}px`;
+  calorieOverlayScrollLocked = true;
+}
+
+function unlockCalorieOverlayScrollNow() {
+  clearCalorieOverlayUnlockWaiters();
+  if (!calorieOverlayScrollLocked || !document.body) return;
+
+  const restoreY = calorieOverlayScrollY;
+  document.body.classList.remove("modal-scroll-locked");
+  document.body.style.top = "";
+  window.scrollTo(0, restoreY);
+  requestAnimationFrame(() => {
+    window.scrollTo(0, restoreY);
+  });
+
+  calorieOverlayScrollLocked = false;
+}
+
+function unlockCalorieOverlayScrollAfterKeyboard() {
+  clearCalorieOverlayUnlockWaiters();
+  if (!calorieOverlayScrollLocked) return;
+
+  if (window.visualViewport && isMobileCaloriesUI()) {
+    const viewport = window.visualViewport;
+    const deadlineTs = Date.now() + 420;
+
+    function finalizeUnlock() {
+      unlockCalorieOverlayScrollNow();
+    }
+
+    function queueUnlock() {
+      if (calorieOverlayUnlockTimer !== null) {
+        window.clearTimeout(calorieOverlayUnlockTimer);
+      }
+
+      const msLeft = deadlineTs - Date.now();
+      const delay = msLeft <= 0 ? 0 : Math.min(120, msLeft);
+      calorieOverlayUnlockTimer = window.setTimeout(finalizeUnlock, delay);
+    }
+
+    function onViewportChange() {
+      queueUnlock();
+    }
+
+    viewport.addEventListener("resize", onViewportChange);
+    viewport.addEventListener("scroll", onViewportChange);
+    calorieOverlayViewportCleanup = () => {
+      viewport.removeEventListener("resize", onViewportChange);
+      viewport.removeEventListener("scroll", onViewportChange);
+    };
+
+    queueUnlock();
+    return;
+  }
+
+  unlockCalorieOverlayScrollNow();
+}
+
+function hasVisibleCalorieOverlay() {
+  const overlayIds = [
+    "calorie-macro-modal",
+    "calorie-manual-modal",
+    "calorie-preview-modal",
+    "calorie-setup-modal"
+  ];
+
+  for (let i = 0; i < overlayIds.length; i += 1) {
+    const overlay = document.getElementById(overlayIds[i]);
+    if (overlay && !overlay.classList.contains("hidden")) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function syncCalorieOverlayUiState() {
+  const root = document.getElementById("calories-page-root");
+  const isOpen = hasVisibleCalorieOverlay();
+
+  if (root) {
+    root.classList.toggle("is-overlay-open", isOpen);
+  }
+
+  if (isOpen) {
+    closeFabMenu();
+    lockCalorieOverlayScroll();
+    return;
+  }
+
+  unlockCalorieOverlayScrollAfterKeyboard();
+}
+
+function isMobileCaloriesUI() {
+  const ua = navigator.userAgent || "";
+  const touchPoints = navigator.maxTouchPoints || 0;
+  const isIpad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && touchPoints > 1);
+  if (isIpad) return false;
+
+  const isTouchDevice = touchPoints > 0 || ("ontouchstart" in window);
+  if (!isTouchDevice) return false;
+
+  return window.matchMedia("(max-width: 1024px)").matches || /Android|iPhone|iPod|Mobile|Tablet/i.test(ua);
+}
+
+function closeOpenMealSwipeRow() {
+  if (openMealSwipeRow && typeof openMealSwipeRow._close === "function") {
+    openMealSwipeRow._close();
+  }
+  openMealSwipeRow = null;
+}
+
+function closeOpenMealMenu() {
+  if (!openMealMenuId) return;
+
+  const escapedId = cssEscape(openMealMenuId);
+  const menu = document.querySelector(`[data-meal-menu="${escapedId}"]`);
+  const trigger = document.querySelector(`[data-meal-menu-toggle="${escapedId}"]`);
+  const card = menu ? menu.closest(".meal-feed-card") : null;
+
+  if (menu) menu.classList.remove("open");
+  if (trigger) trigger.setAttribute("aria-expanded", "false");
+  if (card) card.classList.remove("is-menu-open");
+  openMealMenuId = null;
+}
+
+function toggleMealMenu(mealId) {
+  if (!mealId) return;
+
+  if (openMealMenuId === mealId) {
+    closeOpenMealMenu();
+    return;
+  }
+
+  closeOpenMealSwipeRow();
+  closeOpenMealMenu();
+
+  const escapedId = cssEscape(mealId);
+  const menu = document.querySelector(`[data-meal-menu="${escapedId}"]`);
+  const trigger = document.querySelector(`[data-meal-menu-toggle="${escapedId}"]`);
+  const card = menu ? menu.closest(".meal-feed-card") : null;
+
+  if (!menu || !trigger) return;
+
+  menu.classList.add("open");
+  trigger.setAttribute("aria-expanded", "true");
+  if (card) card.classList.add("is-menu-open");
+  openMealMenuId = mealId;
+}
+
+function openMealDeleteSheet(mealId) {
+  if (!mealId) return;
+
+  const sheet = document.getElementById("calorie-delete-sheet");
+  if (!sheet) {
+    if (confirm("Delete this meal?")) {
+      if (!deleteMeal(mealId)) return;
+      latestState = loadState();
+      renderTrackerView(latestState);
+      showToast("Meal deleted");
+    }
+    return;
+  }
+
+  pendingDeleteMealId = mealId;
+  closeOpenMealMenu();
+  closeOpenMealSwipeRow();
+  clearDeleteSheetTransitionWatcher();
+
+  sheet.classList.remove("hidden");
+  sheet.classList.remove("is-closing");
+  sheet.setAttribute("aria-hidden", "false");
+  setDeleteSheetOpenState(true);
+
+  requestAnimationFrame(() => {
+    sheet.classList.add("is-open");
+  });
+}
+
+function closeMealDeleteSheet(shouldClearPending = true) {
+  const sheet = document.getElementById("calorie-delete-sheet");
+
+  if (shouldClearPending) {
+    pendingDeleteMealId = null;
+  }
+
+  clearDeleteSheetTransitionWatcher();
+  if (!sheet) {
+    setDeleteSheetOpenState(false);
+    return;
+  }
+
+  if (sheet.classList.contains("hidden")) {
+    sheet.classList.remove("is-closing");
+    sheet.setAttribute("aria-hidden", "true");
+    setDeleteSheetOpenState(false);
+    return;
+  }
+
+  sheet.classList.remove("is-open");
+  sheet.classList.add("is-closing");
+  sheet.setAttribute("aria-hidden", "true");
+
+  const panel = sheet.querySelector(".weight-delete-sheet-panel") || sheet;
+  const backdrop = sheet.querySelector(".weight-delete-sheet-backdrop");
+  const closeMs = Math.max(getMaxTransitionMs(panel), getMaxTransitionMs(backdrop), getMaxTransitionMs(sheet)) + 48;
+
+  deleteSheetTransitionCleanup = onTransitionEndOrTimeout(panel, closeMs, () => {
+    deleteSheetTransitionCleanup = null;
+    if (sheet.classList.contains("is-open")) return;
+    sheet.classList.remove("is-closing");
+    sheet.classList.add("hidden");
+    setDeleteSheetOpenState(false);
+  });
+}
+
+function confirmDeleteMeal() {
+  const deletingId = pendingDeleteMealId;
+  if (!deletingId) return;
+
+  closeMealDeleteSheet(false);
+  pendingDeleteMealId = null;
+
+  if (!deleteMeal(deletingId)) return;
+  latestState = loadState();
+  renderTrackerView(latestState);
+  showToast("Meal deleted");
+}
+
 function getOverlayElement(id) {
   return document.getElementById(id);
 }
@@ -120,6 +506,7 @@ function hideOverlayImmediately(id) {
   overlay.classList.remove("is-closing");
   overlay.classList.add("hidden");
   overlay.setAttribute("aria-hidden", "true");
+  syncCalorieOverlayUiState();
 }
 
 function openOverlay(id) {
@@ -131,6 +518,7 @@ function openOverlay(id) {
   overlay.classList.remove("hidden");
   overlay.classList.remove("is-closing");
   overlay.setAttribute("aria-hidden", "false");
+  syncCalorieOverlayUiState();
   requestAnimationFrame(() => {
     overlay.classList.add("is-open");
   });
@@ -149,6 +537,7 @@ function closeOverlay(id) {
     overlay.classList.add("hidden");
     overlay.classList.remove("is-closing");
     closeTimers.delete(id);
+    syncCalorieOverlayUiState();
   }, OVERLAY_CLOSE_MS);
 
   closeTimers.set(id, timer);
@@ -251,11 +640,19 @@ function setSetupError(message) {
 function setManualBusy(isBusy) {
   const submitBtn = document.getElementById("calorie-manual-submit");
   const description = document.getElementById("calorie-manual-description");
+  const photoInput = document.getElementById("calorie-manual-photo-input");
+  const choosePhotoBtn = document.querySelector('[data-action="choose-manual-photo"]');
+  const photoRemoveButtons = document.querySelectorAll(".calories-photo-remove");
   if (submitBtn) {
     submitBtn.disabled = isBusy;
     submitBtn.textContent = isBusy ? "Analyzing..." : "Analyze meal";
   }
   if (description) description.disabled = isBusy;
+  if (photoInput) photoInput.disabled = isBusy;
+  if (choosePhotoBtn) choosePhotoBtn.disabled = isBusy;
+  for (let i = 0; i < photoRemoveButtons.length; i += 1) {
+    photoRemoveButtons[i].disabled = isBusy;
+  }
 }
 
 function setPreviewLoading(isLoading) {
@@ -277,9 +674,39 @@ function setFabMenuOpen(isOpen) {
   const toggle = document.getElementById("calories-fab-more");
   if (!menu || !toggle) return;
 
-  menu.classList.toggle("hidden", !isOpen);
-  menu.setAttribute("aria-hidden", isOpen ? "false" : "true");
-  toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  if (fabMenuCloseTimer !== null) {
+    window.clearTimeout(fabMenuCloseTimer);
+    fabMenuCloseTimer = null;
+  }
+
+  if (isOpen) {
+    menu.classList.remove("hidden");
+    menu.classList.remove("is-closing");
+    menu.setAttribute("aria-hidden", "false");
+    toggle.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      menu.classList.add("is-open");
+    });
+    return;
+  }
+
+  menu.setAttribute("aria-hidden", "true");
+  toggle.setAttribute("aria-expanded", "false");
+
+  if (menu.classList.contains("hidden")) return;
+
+  const prefersReducedMotion = typeof window.matchMedia === "function"
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const closeDelay = prefersReducedMotion ? 1 : 180;
+
+  menu.classList.remove("is-open");
+  menu.classList.add("is-closing");
+
+  fabMenuCloseTimer = window.setTimeout(() => {
+    menu.classList.add("hidden");
+    menu.classList.remove("is-closing");
+    fabMenuCloseTimer = null;
+  }, closeDelay);
 }
 
 function closeFabMenu() {
@@ -299,16 +726,106 @@ function triggerScanPicker() {
   input.click();
 }
 
+function renderManualPhotoPreviews() {
+  const list = document.getElementById("calorie-manual-photo-list");
+  if (!list) return;
+
+  if (!manualPhotoFiles.length) {
+    list.innerHTML = "";
+    list.classList.add("hidden");
+    return;
+  }
+
+  const markup = new Array(manualPhotoFiles.length);
+  for (let i = 0; i < manualPhotoFiles.length; i += 1) {
+    const photo = manualPhotoFiles[i];
+    markup[i] = `<div class="calories-photo-thumb">
+      <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(photo.file.name || "Meal photo")}">
+      <button type="button"
+              class="calories-photo-remove"
+              data-action="remove-manual-photo"
+              data-photo-id="${escapeHtml(photo.id)}"
+              aria-label="Remove ${escapeHtml(photo.file.name || "photo")}">
+        <span aria-hidden="true">x</span>
+      </button>
+    </div>`;
+  }
+
+  list.innerHTML = markup.join("");
+  list.classList.remove("hidden");
+}
+
+function revokeManualPhotoPreviews() {
+  for (let i = 0; i < manualPhotoFiles.length; i += 1) {
+    const item = manualPhotoFiles[i];
+    if (item && item.url && window.URL && typeof window.URL.revokeObjectURL === "function") {
+      window.URL.revokeObjectURL(item.url);
+    }
+  }
+  manualPhotoFiles = [];
+  renderManualPhotoPreviews();
+}
+
+function addManualPhotos(fileList) {
+  const files = Array.isArray(fileList) ? fileList : Array.from(fileList || []);
+  if (!files.length) return;
+
+  let hitLimit = false;
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    if (!file || !String(file.type || "").startsWith("image/")) continue;
+
+    if (manualPhotoFiles.length >= MAX_MANUAL_PHOTOS) {
+      hitLimit = true;
+      break;
+    }
+
+    const url = window.URL && typeof window.URL.createObjectURL === "function"
+      ? window.URL.createObjectURL(file)
+      : "";
+
+    manualPhotoFiles.push({
+      id: createManualPhotoId(),
+      file,
+      url
+    });
+  }
+
+  renderManualPhotoPreviews();
+
+  if (hitLimit) {
+    showToast("You can add up to 3 photos.");
+  }
+}
+
+function removeManualPhoto(photoId) {
+  if (!photoId) return;
+
+  const nextFiles = [];
+  for (let i = 0; i < manualPhotoFiles.length; i += 1) {
+    const item = manualPhotoFiles[i];
+    if (item.id !== photoId) {
+      nextFiles.push(item);
+      continue;
+    }
+
+    if (item.url && window.URL && typeof window.URL.revokeObjectURL === "function") {
+      window.URL.revokeObjectURL(item.url);
+    }
+  }
+
+  manualPhotoFiles = nextFiles;
+  renderManualPhotoPreviews();
+}
+
 function resetManualComposer() {
   const description = document.getElementById("calorie-manual-description");
-  const photoName = document.getElementById("calorie-manual-photo-name");
   const photoInput = document.getElementById("calorie-manual-photo-input");
 
-  manualPhotoFile = null;
+  revokeManualPhotoPreviews();
   manualEntryMode = "manual";
 
   if (description) description.value = "";
-  if (photoName) photoName.textContent = "No photo selected";
   if (photoInput) photoInput.value = "";
 
   stopVoiceRecognition();
@@ -368,6 +885,37 @@ function getConfidenceCopy(confidence) {
   return "Medium confidence estimate";
 }
 
+function getPreviewSliderPortion(slider, fallback = 1) {
+  if (!slider) return fallback;
+
+  const liveValue = parseNumber(slider.dataset ? slider.dataset.appleSliderLiveValue : null);
+  const currentValue = liveValue !== null ? liveValue : parseNumber(slider.value);
+  const min = parseNumber(slider.min);
+  const max = parseNumber(slider.max);
+  let portion = currentValue !== null ? currentValue : fallback;
+
+  if (min !== null) portion = Math.max(min, portion);
+  if (max !== null) portion = Math.min(max, portion);
+
+  return clampPortion(portion) || fallback;
+}
+
+function scalePreviewNutritionLive(baseValues, portion = 1) {
+  const normalizedPortion = Math.max(0, portion || 0);
+  const baseCalories = Math.max(0, Math.round((baseValues && baseValues.baseCalories) || 0));
+  const baseProtein = Math.max(0, Math.round((baseValues && baseValues.baseProtein) || 0));
+  const baseCarbs = Math.max(0, Math.round((baseValues && baseValues.baseCarbs) || 0));
+  const baseFat = Math.max(0, Math.round((baseValues && baseValues.baseFat) || 0));
+
+  return {
+    portion: normalizedPortion,
+    calories: Math.max(0, Math.round(baseCalories * normalizedPortion)),
+    protein: Math.max(0, Math.round(baseProtein * normalizedPortion)),
+    carbs: Math.max(0, Math.round(baseCarbs * normalizedPortion)),
+    fat: Math.max(0, Math.round(baseFat * normalizedPortion))
+  };
+}
+
 function updatePreviewMetrics() {
   if (!previewDraft) return;
 
@@ -379,13 +927,15 @@ function updatePreviewMetrics() {
   const carbsValue = document.getElementById("calorie-preview-carbs");
   const fatValue = document.getElementById("calorie-preview-fat");
 
-  const portion = clampPortion(slider ? slider.value : previewDraft.portion);
-  const scaled = scaleMealNutrition(previewDraft, portion);
+  const portion = getPreviewSliderPortion(slider, previewDraft.portion);
+  const scaled = scalePreviewNutritionLive(previewDraft, portion);
   previewDraft.portion = portion;
 
   if (nameInput) {
     previewDraft.name = nameInput.value.trim() || previewDraft.name;
   }
+
+  syncRangeInputVisual(slider);
 
   if (portionValue) portionValue.textContent = `${portion}x`;
   if (caloriesValue) caloriesValue.textContent = formatCalories(scaled.calories);
@@ -407,12 +957,22 @@ function applyPreviewDraft() {
     return;
   }
 
-  title.textContent = (previewDraft.mode === "edit") ? "Edit meal" : "Confirm meal";
-  source.textContent = getPreviewSourceLabel(previewDraft.source);
+  if (previewDraft.mode === "edit") {
+    title.textContent = "Edit meal";
+    source.textContent = getPreviewSourceLabel(previewDraft.source);
+    submitLabel.textContent = "Save meal";
+  } else if (previewDraft.mode === "clone") {
+    title.textContent = "Clone meal";
+    source.textContent = "Duplicate meal";
+    submitLabel.textContent = "Create clone";
+  } else {
+    title.textContent = "Confirm meal";
+    source.textContent = getPreviewSourceLabel(previewDraft.source);
+    submitLabel.textContent = "Add meal";
+  }
   nameInput.value = previewDraft.name;
   slider.value = String(previewDraft.portion);
   confidence.textContent = getConfidenceCopy(previewDraft.confidence);
-  submitLabel.textContent = (previewDraft.mode === "edit") ? "Save meal" : "Add meal";
   deleteBtn.classList.toggle("hidden", previewDraft.mode !== "edit");
   setPreviewError("");
   setPreviewLoading(false);
@@ -482,28 +1042,252 @@ function formatFeedTimestamp(iso) {
   return `${date.toLocaleDateString(undefined, dateOptions)} · ${timeText}`;
 }
 
+function buildMergedRecentFoods(summary) {
+  const recentFoods = summary && Array.isArray(summary.recentFoods) ? summary.recentFoods : [];
+  const frequentFoods = summary && Array.isArray(summary.frequentFoods) ? summary.frequentFoods : [];
+  const merged = [];
+  const seen = new Set();
+  const maxLength = Math.max(recentFoods.length, frequentFoods.length);
+
+  for (let i = 0; i < maxLength; i += 1) {
+    const candidates = [frequentFoods[i], recentFoods[i]];
+    for (let j = 0; j < candidates.length; j += 1) {
+      const item = candidates[j];
+      if (!item || typeof item !== "object") continue;
+
+      const key = String(item.name || item.id || "").trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
 function renderRecentFoods(summary) {
   const container = document.getElementById("calorie-recent-foods");
   if (!container) return;
 
-  const recentFoods = summary && Array.isArray(summary.recentFoods) ? summary.recentFoods : [];
-  if (recentFoods.length === 0) {
-    container.innerHTML = '<p class="apple-caption calories-recent-empty">Recent foods will appear here after your first meal.</p>';
+  const mergedFoods = buildMergedRecentFoods(summary);
+
+  if (mergedFoods.length === 0) {
+    container.innerHTML = '<p class="apple-caption calories-recent-empty">Recent and frequent foods will appear here after your first meal.</p>';
     return;
   }
 
   const markup = [];
-  for (let i = 0; i < recentFoods.length; i += 1) {
-    const item = recentFoods[i];
+  for (let i = 0; i < mergedFoods.length; i += 1) {
+    const item = mergedFoods[i];
+    const fullName = item && item.name ? String(item.name) : "Meal";
+    const shortName = truncateLabel(fullName);
+    const safeTitle = shortName !== fullName ? ` title="${escapeHtml(fullName)}"` : "";
+
     markup.push(`
-      <button type="button" class="calories-recent-food" data-action="log-recent-food" data-meal-id="${escapeHtml(item.id)}">
-        <span class="calories-recent-food-name">${escapeHtml(item.name)}</span>
+      <button type="button" class="calories-recent-food" data-action="log-recent-food" data-meal-id="${escapeHtml(item.id)}"${safeTitle}>
+        <span class="calories-recent-food-name">${escapeHtml(shortName)}</span>
         <span class="calories-recent-food-meta">${formatCalories(item.calories)} kcal</span>
       </button>
     `);
   }
 
   container.innerHTML = markup.join("");
+}
+
+function renderMacroChip(label, value, tone) {
+  return `<span class="meal-macro-chip ${tone}"><span class="meal-macro-chip-key">${label}</span><span class="meal-macro-chip-value">${formatCalories(value)}g</span></span>`;
+}
+
+function mealMacroRowHtml(meal) {
+  return `<div class="meal-macro-row" aria-label="Meal macros">${renderMacroChip("P", meal.protein, "protein")}${renderMacroChip("C", meal.carbs, "carbs")}${renderMacroChip("F", meal.fat, "fat")}</div>`;
+}
+
+function mealMetaHtml(meal) {
+  return `<p class="meal-feed-meta"><span class="meal-feed-meta-icon" aria-hidden="true">${getMealBadgeIcon(meal.source)}</span><span class="meal-feed-meta-divider" aria-hidden="true">|</span><span class="meal-feed-meta-text">On ${escapeHtml(formatFeedTimestamp(meal.loggedAt))}</span></p>`;
+}
+
+function startOfDay(value) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function startOfWeek(value) {
+  const date = startOfDay(value);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  return date;
+}
+
+function startOfMonth(value) {
+  const date = startOfDay(value);
+  date.setDate(1);
+  return date;
+}
+
+function shiftDateByDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function shiftDateByMonths(value, months) {
+  const date = new Date(value);
+  date.setMonth(date.getMonth() + months);
+  return date;
+}
+
+function buildMealFeedGroups(meals) {
+  const source = Array.isArray(meals) ? meals : [];
+  const now = new Date();
+  const todayStartMs = startOfDay(now).getTime();
+  const yesterdayStartMs = startOfDay(shiftDateByDays(now, -1)).getTime();
+  const thisWeekStartMs = startOfWeek(now).getTime();
+  const lastWeekStartMs = startOfWeek(shiftDateByDays(now, -7)).getTime();
+  const currentMonthStartMs = startOfMonth(now).getTime();
+  const lastMonthStartMs = startOfMonth(shiftDateByMonths(now, -1)).getTime();
+  const fixedGroups = [
+    { key: "today", title: "Today", entries: [] },
+    { key: "yesterday", title: "Yesterday", entries: [] },
+    { key: "this-week", title: "This Week", entries: [] },
+    { key: "last-week", title: "Last Week", entries: [] },
+    { key: "last-month", title: "Last Month", entries: [] }
+  ];
+  const monthGroups = new Map();
+
+  for (let i = 0; i < source.length; i += 1) {
+    const meal = source[i];
+    const timestamp = new Date(meal.loggedAt).getTime();
+    if (!Number.isFinite(timestamp)) continue;
+
+    if (timestamp >= todayStartMs) {
+      fixedGroups[0].entries.push(meal);
+      continue;
+    }
+
+    if (timestamp >= yesterdayStartMs) {
+      fixedGroups[1].entries.push(meal);
+      continue;
+    }
+
+    if (timestamp >= thisWeekStartMs) {
+      fixedGroups[2].entries.push(meal);
+      continue;
+    }
+
+    if (timestamp >= lastWeekStartMs) {
+      fixedGroups[3].entries.push(meal);
+      continue;
+    }
+
+    if (timestamp >= lastMonthStartMs && timestamp < currentMonthStartMs) {
+      fixedGroups[4].entries.push(meal);
+      continue;
+    }
+
+    const mealDate = new Date(meal.loggedAt);
+    const monthKey = `${mealDate.getFullYear()}-${String(mealDate.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthGroups.has(monthKey)) {
+      monthGroups.set(monthKey, {
+        key: `month-${monthKey}`,
+        title: mealDate.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        sortValue: mealDate.getFullYear() * 100 + mealDate.getMonth(),
+        entries: []
+      });
+    }
+
+    monthGroups.get(monthKey).entries.push(meal);
+  }
+
+  const datedMonthGroups = Array.from(monthGroups.values()).sort((a, b) => b.sortValue - a.sortValue);
+  const normalizedMonthGroups = datedMonthGroups.map((group) => ({
+    key: group.key,
+    title: group.title,
+    entries: group.entries
+  }));
+
+  return fixedGroups.filter((group) => group.entries.length > 0).concat(normalizedMonthGroups);
+}
+
+function mealGroupHtml(group, useMobileUi) {
+  const entryMarkup = new Array(group.entries.length);
+  for (let i = 0; i < group.entries.length; i += 1) {
+    entryMarkup[i] = useMobileUi ? mobileMealRowHtml(group.entries[i]) : desktopMealCardHtml(group.entries[i]);
+  }
+
+  return `<section class="meal-feed-group" data-meal-group="${escapeHtml(group.key)}">
+    <div class="meal-feed-group-header">
+      <p class="apple-overline meal-feed-group-title">${escapeHtml(group.title)}</p>
+      <p class="apple-caption meal-feed-group-count">${escapeHtml(formatCountLabel(group.entries.length, "meal"))}</p>
+    </div>
+    <div class="meal-feed-group-list${useMobileUi ? " meal-feed-group-list-mobile" : ""}">
+      ${entryMarkup.join("")}
+    </div>
+  </section>`;
+}
+
+function desktopMealCardHtml(meal) {
+  const mealId = escapeHtml(meal.id);
+  const mealName = escapeHtml(meal.name);
+
+  return `<article class="meal-feed-card meal-feed-card-desktop" data-meal-id="${mealId}" role="listitem">
+    <div class="meal-feed-main" aria-label="${mealName}">
+      <div class="meal-feed-leading">
+        <div class="meal-feed-copy">
+          <p class="meal-feed-name">${mealName}</p>
+          ${mealMetaHtml(meal)}
+          ${mealMacroRowHtml(meal)}
+        </div>
+      </div>
+      <div class="meal-feed-calories">
+        <p class="meal-feed-calories-value">${formatCalories(meal.calories)}</p>
+        <p class="meal-feed-calories-unit">kcal</p>
+      </div>
+    </div>
+    <div class="meal-feed-actions">
+      <div class="meal-menu-anchor">
+        <button type="button"
+                class="meal-menu-trigger"
+                aria-label="Open meal actions"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                data-meal-menu-toggle="${mealId}">
+          ${MEAL_ICONS.MENU}
+        </button>
+        <div class="meal-menu" role="menu" data-meal-menu="${mealId}">
+          <button type="button" class="meal-menu-item" role="menuitem" data-action="edit-meal" data-meal-id="${mealId}">Edit</button>
+          <button type="button" class="meal-menu-item" role="menuitem" data-action="clone-meal" data-meal-id="${mealId}">Clone</button>
+          <button type="button" class="meal-menu-item danger" role="menuitem" data-action="delete-meal" data-meal-id="${mealId}">Delete</button>
+        </div>
+      </div>
+    </div>
+  </article>`;
+}
+
+function mobileMealRowHtml(meal) {
+  const mealId = escapeHtml(meal.id);
+
+  return `<article class="meal-swipe-row" data-meal-id="${mealId}" role="listitem">
+    <div class="meal-pill-actions">
+      <button type="button" class="meal-pill-btn edit" aria-label="Edit meal" data-action="edit-meal" data-meal-id="${mealId}">${MEAL_ICONS.EDIT}</button>
+      <button type="button" class="meal-pill-btn clone" aria-label="Clone meal" data-action="clone-meal" data-meal-id="${mealId}">${MEAL_ICONS.CLONE}</button>
+      <button type="button" class="meal-pill-btn delete" aria-label="Delete meal" data-action="delete-meal" data-meal-id="${mealId}">${MEAL_ICONS.DELETE}</button>
+    </div>
+    <div class="meal-row-content">
+      <div class="meal-feed-leading meal-feed-leading-compact">
+        <div class="meal-feed-copy meal-feed-copy-compact">
+          <p class="meal-feed-name">${escapeHtml(meal.name)}</p>
+          ${mealMetaHtml(meal)}
+          ${mealMacroRowHtml(meal)}
+        </div>
+      </div>
+      <div class="meal-feed-calories meal-feed-calories-compact">
+        <p class="meal-feed-calories-value">${formatCalories(meal.calories)}</p>
+        <p class="meal-feed-calories-unit">kcal</p>
+      </div>
+    </div>
+  </article>`;
 }
 
 function renderFeed(summary) {
@@ -515,6 +1299,11 @@ function renderFeed(summary) {
 
   const meals = summary && Array.isArray(summary.meals) ? summary.meals : [];
   const todayCount = summary ? summary.mealCount : 0;
+  const useMobileUi = isMobileCaloriesUI();
+
+  lastCaloriesUiMode = useMobileUi;
+  closeOpenMealMenu();
+  closeOpenMealSwipeRow();
 
   if (todayCount > 0) {
     feedMeta.textContent = `${formatCountLabel(todayCount, "meal")} today`;
@@ -527,32 +1316,23 @@ function renderFeed(summary) {
   if (meals.length === 0) {
     emptyState.classList.remove("hidden");
     list.innerHTML = "";
+    closeMealDeleteSheet();
     return;
   }
 
   emptyState.classList.add("hidden");
 
-  const markup = [];
-  for (let i = 0; i < meals.length; i += 1) {
-    const meal = meals[i];
-    markup.push(`
-      <button type="button" class="meal-feed-card" data-action="edit-meal" data-meal-id="${escapeHtml(meal.id)}" role="listitem">
-        <div class="meal-feed-leading">
-          <span class="meal-feed-badge" aria-hidden="true">${getMealBadgeIcon(meal.source)}</span>
-          <div class="meal-feed-copy">
-            <p class="meal-feed-name">${escapeHtml(meal.name)}</p>
-            <p class="meal-feed-meta">${escapeHtml(formatFeedTimestamp(meal.loggedAt))}</p>
-          </div>
-        </div>
-        <div class="meal-feed-calories">
-          <p class="meal-feed-calories-value">${formatCalories(meal.calories)}</p>
-          <p class="meal-feed-calories-unit">kcal</p>
-        </div>
-      </button>
-    `);
+  const groups = buildMealFeedGroups(meals);
+  const markup = new Array(groups.length);
+  for (let i = 0; i < groups.length; i += 1) {
+    markup[i] = mealGroupHtml(groups[i], useMobileUi);
   }
 
   list.innerHTML = markup.join("");
+
+  if (useMobileUi) {
+    initMealSwipeRows(list);
+  }
 }
 
 function renderMacroModal(summary) {
@@ -685,12 +1465,15 @@ function renderTrackerView(state) {
   maybeSendReminderNotification(summary);
 }
 
-async function requestMealEstimate({ mode, note, file }) {
+async function requestMealEstimate({ mode, note, files }) {
   const formData = new FormData();
   formData.set("mode", mode || "manual");
   formData.set("note", note || "");
-  if (file) {
-    formData.set("image", file);
+  const imageFiles = Array.isArray(files) ? files : [];
+  for (let i = 0; i < imageFiles.length; i += 1) {
+    if (imageFiles[i]) {
+      formData.append("images", imageFiles[i]);
+    }
   }
 
   let response;
@@ -735,7 +1518,7 @@ async function handleScanFile(file) {
     const meal = await requestMealEstimate({
       mode: "scan",
       note: "",
-      file
+      files: file ? [file] : []
     });
     openPreviewModalWithDraft({
       ...meal,
@@ -757,7 +1540,7 @@ async function submitManualAnalysis(event = null) {
   const sourceMode = manualEntryMode;
   setManualError("");
 
-  if (!note && !manualPhotoFile) {
+  if (!note && manualPhotoFiles.length === 0) {
     setManualError("Add a description or a photo.");
     return true;
   }
@@ -768,7 +1551,7 @@ async function submitManualAnalysis(event = null) {
     const meal = await requestMealEstimate({
       mode: manualEntryMode,
       note,
-      file: manualPhotoFile
+      files: manualPhotoFiles.map((item) => item.file)
     });
 
     resetManualComposer();
@@ -809,9 +1592,19 @@ function handleRecentFoodLog(mealId) {
 }
 
 function handleEditMeal(mealId) {
+  closeOpenMealMenu();
+  closeOpenMealSwipeRow();
   const meal = getMealById(mealId);
   if (!meal) return;
   openPreviewModalWithDraft(meal, "edit");
+}
+
+function handleCloneMeal(mealId) {
+  closeOpenMealMenu();
+  closeOpenMealSwipeRow();
+  const meal = getMealById(mealId);
+  if (!meal) return;
+  openPreviewModalWithDraft(meal, "clone");
 }
 
 function submitPreviewMeal(event) {
@@ -848,7 +1641,7 @@ function submitPreviewMeal(event) {
       ...payload,
       loggedAt: new Date().toISOString()
     });
-    showToast(`${name} added`);
+    showToast(previewDraft.mode === "clone" ? `${name} cloned` : `${name} added`);
   }
 
   latestState = loadState();
@@ -893,12 +1686,8 @@ function bindManualEvents() {
   if (photoInput && photoInput.dataset.bound !== "1") {
     photoInput.dataset.bound = "1";
     photoInput.addEventListener("change", () => {
-      const file = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
-      manualPhotoFile = file;
-      const photoName = document.getElementById("calorie-manual-photo-name");
-      if (photoName) {
-        photoName.textContent = file ? file.name : "No photo selected";
-      }
+      addManualPhotos(photoInput.files);
+      photoInput.value = "";
     });
   }
 
@@ -948,6 +1737,282 @@ function bindFabGesture() {
   primary.addEventListener("pointerup", clearPress);
   primary.addEventListener("pointerleave", clearPress);
   primary.addEventListener("pointercancel", clearPress);
+}
+
+function initMealSwipeRow(row) {
+  if (!row || row.dataset.swipeBound === "1") return;
+  row.dataset.swipeBound = "1";
+
+  const content = row.querySelector(".meal-row-content");
+  const actions = row.querySelector(".meal-pill-actions");
+  if (!content || !actions) return;
+
+  const buttons = Array.prototype.slice.call(actions.querySelectorAll(".meal-pill-btn"));
+  const deleteButton = row.querySelector(".meal-pill-btn.delete");
+  const openPx = measureOpenPx();
+  row._openPx = openPx;
+
+  let startX = 0;
+  let startY = 0;
+  let baseX = 0;
+  let curX = 0;
+  let lastMoveX = 0;
+  let lastMoveTime = 0;
+  let velocityX = 0;
+  let dragging = false;
+  let locked = false;
+  let queuedX = 0;
+  let translateFrame = null;
+  let willChangeTimer = null;
+  let actionsHideTimer = null;
+
+  function measureOpenPx() {
+    if (!buttons.length) return 0;
+
+    const actionsStyle = window.getComputedStyle(actions);
+    let gap = parseFloat(actionsStyle.columnGap || actionsStyle.gap || "0");
+    let rightInset = parseFloat(actionsStyle.right || "0");
+    if (!Number.isFinite(gap)) gap = 0;
+    if (!Number.isFinite(rightInset)) rightInset = 0;
+
+    let actionWidth = 0;
+    for (let i = 0; i < buttons.length; i += 1) {
+      let layoutWidth = buttons[i].offsetWidth;
+      if (!layoutWidth) {
+        const btnStyle = window.getComputedStyle(buttons[i]);
+        layoutWidth = parseFloat(btnStyle.width || "0");
+      }
+      actionWidth += layoutWidth;
+    }
+    actionWidth += Math.max(0, buttons.length - 1) * gap;
+
+    return Math.max(
+      MEAL_SWIPE_CONFIG.MIN_OPEN_PX,
+      Math.ceil(actionWidth + rightInset + MEAL_SWIPE_CONFIG.OPEN_EXTRA_PX)
+    );
+  }
+
+  function clearWillChangeSoon() {
+    if (willChangeTimer !== null) {
+      window.clearTimeout(willChangeTimer);
+    }
+
+    const delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
+    willChangeTimer = window.setTimeout(() => {
+      willChangeTimer = null;
+      if (!dragging) {
+        content.style.willChange = "";
+      }
+    }, delay);
+  }
+
+  function clearActionsHideSoon() {
+    if (actionsHideTimer !== null) {
+      window.clearTimeout(actionsHideTimer);
+      actionsHideTimer = null;
+    }
+  }
+
+  function cancelTranslateFrame() {
+    if (translateFrame !== null) {
+      window.cancelAnimationFrame(translateFrame);
+      translateFrame = null;
+    }
+  }
+
+  function toggleDeleteExpansion(x) {
+    if (!deleteButton) return;
+    if (x < -(window.innerWidth * MEAL_SWIPE_CONFIG.FULL_FRAC)) {
+      deleteButton.classList.add("expanding");
+    } else {
+      deleteButton.classList.remove("expanding");
+    }
+  }
+
+  function toggleButtons(progress) {
+    for (let i = 0; i < buttons.length; i += 1) {
+      if (progress > (0.08 + i * 0.12)) {
+        buttons[i].classList.add("show");
+      } else {
+        buttons[i].classList.remove("show");
+      }
+    }
+  }
+
+  function applyTranslate(x, animate) {
+    content.style.transition = animate
+      ? "transform var(--motion-duration-snap) var(--motion-ease-emphasized)"
+      : "none";
+    content.style.transform = `translate3d(${x}px, 0, 0)`;
+
+    if (x < -4) {
+      actions.classList.add("visible");
+      toggleButtons(Math.min(1, Math.abs(x) / Math.max(openPx, 1)));
+    } else if (Math.abs(x) < 8) {
+      actions.classList.remove("visible");
+      toggleButtons(0);
+    }
+  }
+
+  function scheduleTranslate(x) {
+    queuedX = x;
+    if (translateFrame !== null) return;
+
+    translateFrame = requestAnimationFrame(() => {
+      translateFrame = null;
+      applyTranslate(queuedX, false);
+      toggleDeleteExpansion(queuedX);
+    });
+  }
+
+  function flushTranslateFrame() {
+    if (translateFrame === null) return;
+    window.cancelAnimationFrame(translateFrame);
+    translateFrame = null;
+    applyTranslate(queuedX, false);
+    toggleDeleteExpansion(queuedX);
+  }
+
+  function snapTo(x) {
+    cancelTranslateFrame();
+    clearActionsHideSoon();
+    curX = x;
+    queuedX = x;
+    applyTranslate(x, true);
+    toggleDeleteExpansion(x);
+
+    if (x < 0) {
+      row.classList.add("is-open");
+    } else {
+      row.classList.remove("is-open");
+    }
+
+    if (x === 0) {
+      const delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
+      actionsHideTimer = window.setTimeout(() => {
+        actionsHideTimer = null;
+        actions.classList.remove("visible");
+        toggleButtons(0);
+      }, delay);
+    }
+
+    clearWillChangeSoon();
+  }
+
+  function closeRow() {
+    snapTo(0);
+    if (openMealSwipeRow === row) openMealSwipeRow = null;
+  }
+
+  function onStart(event) {
+    if (!event.touches || event.touches.length !== 1) return;
+
+    if (openMealSwipeRow && openMealSwipeRow !== row) {
+      closeOpenMealSwipeRow();
+    }
+
+    startX = event.touches[0].clientX;
+    startY = event.touches[0].clientY;
+    baseX = curX;
+    lastMoveX = startX;
+    lastMoveTime = Date.now();
+    velocityX = 0;
+    dragging = true;
+    locked = false;
+    cancelTranslateFrame();
+    clearActionsHideSoon();
+    if (willChangeTimer !== null) {
+      window.clearTimeout(willChangeTimer);
+      willChangeTimer = null;
+    }
+    content.style.willChange = "transform";
+    content.style.transition = "none";
+  }
+
+  function onMove(event) {
+    if (!dragging || !event.touches || event.touches.length !== 1) return;
+
+    const x = event.touches[0].clientX;
+    const y = event.touches[0].clientY;
+    const dx = x - startX;
+    const dy = y - startY;
+
+    if (!locked) {
+      if (Math.hypot(dx, dy) < 5) return;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        dragging = false;
+        content.style.willChange = "";
+        return;
+      }
+      locked = true;
+    }
+
+    if (event.cancelable) event.preventDefault();
+
+    let raw = baseX + dx;
+    const now = Date.now();
+    const dt = now - lastMoveTime;
+    if (dt > 0) {
+      velocityX = (x - lastMoveX) / dt;
+    }
+    lastMoveX = x;
+    lastMoveTime = now;
+
+    if (raw > 0) {
+      raw *= 0.2;
+    }
+
+    if (raw < -openPx) {
+      raw = -openPx + (raw + openPx) * MEAL_SWIPE_CONFIG.DAMP;
+    }
+
+    curX = raw;
+    scheduleTranslate(raw);
+  }
+
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+
+    flushTranslateFrame();
+
+    if (deleteButton) deleteButton.classList.remove("expanding");
+
+    if (curX < -(window.innerWidth * MEAL_SWIPE_CONFIG.FULL_FRAC)) {
+      closeRow();
+      if (navigator.vibrate) navigator.vibrate(10);
+      openMealDeleteSheet(row.getAttribute("data-meal-id"));
+      return;
+    }
+
+    if ((Math.abs(curX) > MEAL_SWIPE_CONFIG.SNAP_PX || velocityX < MEAL_SWIPE_CONFIG.FLICK_VELOCITY) && buttons.length > 0) {
+      snapTo(-(row._openPx || openPx));
+      openMealSwipeRow = row;
+      row._close = closeRow;
+    } else {
+      closeRow();
+    }
+  }
+
+  content.addEventListener("touchstart", onStart, { passive: true });
+  content.addEventListener("touchmove", onMove, { passive: false });
+  content.addEventListener("touchend", onEnd);
+  content.addEventListener("touchcancel", onEnd);
+  content.addEventListener("click", () => {
+    if (openMealSwipeRow === row) {
+      closeRow();
+    }
+  });
+
+  row._close = closeRow;
+}
+
+function initMealSwipeRows(list) {
+  if (!list) return;
+  const rows = list.querySelectorAll(".meal-swipe-row");
+  for (let i = 0; i < rows.length; i += 1) {
+    initMealSwipeRow(rows[i]);
+  }
 }
 
 function startVoiceEntry() {
@@ -1534,6 +2599,22 @@ export function handleDocumentClick(event) {
     closeFabMenu();
   }
 
+  const mealMenuToggle = target.closest("[data-meal-menu-toggle]");
+  if (mealMenuToggle) {
+    toggleMealMenu(mealMenuToggle.getAttribute("data-meal-menu-toggle"));
+    return true;
+  }
+
+  if (target.closest("[data-calorie-delete-confirm]")) {
+    confirmDeleteMeal();
+    return true;
+  }
+
+  if (target.closest("[data-calorie-delete-dismiss]")) {
+    closeMealDeleteSheet();
+    return true;
+  }
+
   const action = target.closest("[data-action]");
   if (action) {
     const actionName = action.getAttribute("data-action");
@@ -1580,6 +2661,11 @@ export function handleDocumentClick(event) {
       return true;
     }
 
+    if (actionName === "remove-manual-photo") {
+      removeManualPhoto(action.getAttribute("data-photo-id"));
+      return true;
+    }
+
     if (actionName === "open-voice-entry") {
       resetManualComposer();
       startVoiceEntry();
@@ -1604,6 +2690,16 @@ export function handleDocumentClick(event) {
 
     if (actionName === "edit-meal") {
       handleEditMeal(action.getAttribute("data-meal-id"));
+      return true;
+    }
+
+    if (actionName === "clone-meal") {
+      handleCloneMeal(action.getAttribute("data-meal-id"));
+      return true;
+    }
+
+    if (actionName === "delete-meal") {
+      openMealDeleteSheet(action.getAttribute("data-meal-id"));
       return true;
     }
 
@@ -1649,6 +2745,10 @@ export function handleDocumentClick(event) {
     return true;
   }
 
+  if (openMealMenuId && !target.closest("[data-meal-menu]") && !target.closest("[data-meal-menu-toggle]")) {
+    closeOpenMealMenu();
+  }
+
   if (target === document.getElementById("calorie-macro-modal")) {
     closeOverlay("calorie-macro-modal");
     return true;
@@ -1670,6 +2770,23 @@ export function handleDocumentClick(event) {
   }
 
   return false;
+}
+
+export function handleDocumentTouchStart(event) {
+  const target = event.target;
+  if (openMealSwipeRow && !openMealSwipeRow.contains(event.target)) {
+    closeOpenMealSwipeRow();
+  }
+
+  if (
+    openMealMenuId
+    && target
+    && typeof target.closest === "function"
+    && !target.closest("[data-meal-menu]")
+    && !target.closest("[data-meal-menu-toggle]")
+  ) {
+    closeOpenMealMenu();
+  }
 }
 
 export function handleSubmit(event) {
@@ -1704,6 +2821,22 @@ export function handleSubmit(event) {
 export function handleEscape() {
   closeFabMenu();
 
+  const deleteSheet = document.getElementById("calorie-delete-sheet");
+  if (deleteSheet && !deleteSheet.classList.contains("hidden")) {
+    closeMealDeleteSheet();
+    return;
+  }
+
+  if (openMealMenuId) {
+    closeOpenMealMenu();
+    return;
+  }
+
+  if (openMealSwipeRow) {
+    closeOpenMealSwipeRow();
+    return;
+  }
+
   if (isOverlayOpen("calorie-preview-modal")) {
     closePreviewModal();
     return;
@@ -1724,18 +2857,55 @@ export function handleEscape() {
   }
 }
 
+export function onViewportChange() {
+  if (resizeFrame !== null) return;
+
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = null;
+
+    const root = document.getElementById("calories-page-root");
+    if (!root) {
+      lastCaloriesUiMode = null;
+      return;
+    }
+
+    const useMobileUi = isMobileCaloriesUI();
+    if (lastCaloriesUiMode === null) {
+      lastCaloriesUiMode = useMobileUi;
+      return;
+    }
+
+    closeOpenMealMenu();
+    closeOpenMealSwipeRow();
+
+    if (useMobileUi !== lastCaloriesUiMode) {
+      renderTrackerView(latestState || loadState());
+    }
+  });
+}
+
 export function resetViewUiState() {
   currentStep = 0;
   touchTracking = false;
   previewDraft = null;
   previewMode = "create";
-  manualPhotoFile = null;
+  revokeManualPhotoPreviews();
   manualEntryMode = "manual";
   fabLongPressHandled = false;
+  pendingDeleteMealId = null;
+  openMealSwipeRow = null;
+  openMealMenuId = null;
+  lastCaloriesUiMode = null;
 
   clearTimer(fabLongPressTimer);
   fabLongPressTimer = null;
+  if (resizeFrame !== null) {
+    window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = null;
+  }
   clearToastTimers();
+  clearDeleteSheetTransitionWatcher();
+  clearCalorieOverlayUnlockWaiters();
   stopVoiceRecognition();
 
   hideVoiceStatus();
@@ -1744,10 +2914,19 @@ export function resetViewUiState() {
   setSetupError("");
   closeFabMenu();
 
+  const deleteSheet = document.getElementById("calorie-delete-sheet");
+  if (deleteSheet) {
+    deleteSheet.classList.remove("is-open");
+    deleteSheet.classList.remove("is-closing");
+    deleteSheet.classList.add("hidden");
+    deleteSheet.setAttribute("aria-hidden", "true");
+  }
+  setDeleteSheetOpenState(false);
   hideOverlayImmediately("calorie-macro-modal");
   hideOverlayImmediately("calorie-manual-modal");
   hideOverlayImmediately("calorie-preview-modal");
   hideOverlayImmediately("calorie-setup-modal");
+  unlockCalorieOverlayScrollNow();
 }
 
 export function render(state) {

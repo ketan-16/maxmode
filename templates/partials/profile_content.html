@@ -18,33 +18,48 @@
     <div class="profile-form-grid">
       <div>
         <label for="profile-age-input" class="apple-field-label">Age</label>
-        <input type="number" id="profile-age-input" min="1" max="120" step="1" inputmode="numeric" class="apple-input" placeholder="e.g. 28">
+        <input type="number" id="profile-age-input" min="1" max="120" step="1" inputmode="numeric" class="apple-input profile-input" placeholder="e.g. 28">
       </div>
 
       <div>
-        <label for="profile-gender-input" class="apple-field-label">Gender</label>
-        <select id="profile-gender-input" class="apple-input">
-          <option value="">Select gender</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-        </select>
+        <p id="profile-gender-label" class="apple-field-label">Gender</p>
+        <input type="hidden" id="profile-gender-input" value="">
+        <div class="apple-segmented profile-segmented"
+             role="radiogroup"
+             aria-labelledby="profile-gender-label"
+             data-profile-segment="profile-gender-input">
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="male">
+            Male
+          </button>
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="female">
+            Female
+          </button>
+        </div>
       </div>
 
       <div class="profile-height-fields">
         <input type="hidden" id="profile-height-unit" value="cm">
         <div id="profile-height-cm-field">
           <label for="profile-height-cm-input" class="apple-field-label">Height (cm)</label>
-          <input type="number" id="profile-height-cm-input" min="50" max="272" step="0.01" inputmode="decimal" class="apple-input" placeholder="e.g. 175">
+          <input type="number" id="profile-height-cm-input" min="50" max="272" step="0.01" inputmode="decimal" class="apple-input profile-input" placeholder="e.g. 175">
         </div>
 
         <div id="profile-height-imperial-field" class="hidden profile-height-imperial-grid">
           <div>
             <label for="profile-height-ft-input" class="apple-field-label">Feet</label>
-            <input type="number" id="profile-height-ft-input" min="1" max="8" step="1" inputmode="numeric" class="apple-input" placeholder="5">
+            <input type="number" id="profile-height-ft-input" min="1" max="8" step="1" inputmode="numeric" class="apple-input profile-input" placeholder="5">
           </div>
           <div>
             <label for="profile-height-in-input" class="apple-field-label">Inches</label>
-            <input type="number" id="profile-height-in-input" min="0" max="11" step="1" inputmode="numeric" class="apple-input" placeholder="9">
+            <input type="number" id="profile-height-in-input" min="0" max="11" step="1" inputmode="numeric" class="apple-input profile-input" placeholder="9">
           </div>
         </div>
       </div>
@@ -90,18 +105,50 @@
     <h2 class="apple-subtitle apple-subtitle-no-margin">User Preferences</h2>
     <div class="profile-preferences-grid">
       <div>
-        <label for="profile-pref-height-unit" class="apple-field-label">Preferred height unit</label>
-        <select id="profile-pref-height-unit" class="apple-input">
-          <option value="cm">cm</option>
-          <option value="ft-in">ft + in</option>
-        </select>
+        <p id="profile-pref-height-unit-label" class="apple-field-label">Preferred height unit</p>
+        <input type="hidden" id="profile-pref-height-unit" value="cm">
+        <div class="apple-segmented profile-segmented"
+             role="radiogroup"
+             aria-labelledby="profile-pref-height-unit-label"
+             data-profile-segment="profile-pref-height-unit">
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="cm">
+            cm
+          </button>
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="ft-in">
+            ft + in
+          </button>
+        </div>
       </div>
       <div>
-        <label for="profile-pref-weight-unit" class="apple-field-label">Preferred weight unit</label>
-        <select id="profile-pref-weight-unit" class="apple-input">
-          <option value="kg">kg</option>
-          <option value="lb">lb</option>
-        </select>
+        <p id="profile-pref-weight-unit-label" class="apple-field-label">Preferred weight unit</p>
+        <input type="hidden" id="profile-pref-weight-unit" value="kg">
+        <div class="apple-segmented profile-segmented"
+             role="radiogroup"
+             aria-labelledby="profile-pref-weight-unit-label"
+             data-profile-segment="profile-pref-weight-unit">
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="kg">
+            kg
+          </button>
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="lb">
+            lb
+          </button>
+        </div>
       </div>
     </div>
   </div>

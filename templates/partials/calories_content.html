@@ -282,19 +282,23 @@
                   class="apple-input calories-textarea"
                   placeholder="Chicken bowl with rice and avocado"></textarea>
 
-        <div class="calories-photo-row">
-          <button type="button"
-                  class="apple-btn apple-btn-neutral apple-btn-compact"
-                  data-action="choose-manual-photo">
-            Add optional photo
-          </button>
-          <p id="calorie-manual-photo-name" class="apple-caption">No photo selected</p>
+        <div class="calories-photo-stack">
+          <div class="calories-photo-row">
+            <button type="button"
+                    class="apple-btn apple-btn-neutral apple-btn-compact"
+                    data-action="choose-manual-photo">
+              Add optional photos
+            </button>
+            <p class="apple-caption calories-photo-hint">Up to 3 photos</p>
+          </div>
+          <div id="calorie-manual-photo-list" class="calories-photo-list hidden" aria-live="polite"></div>
         </div>
 
         <input type="file"
                id="calorie-manual-photo-input"
                class="hidden"
-               accept="image/*">
+               accept="image/*"
+               multiple>
 
         <div id="calorie-voice-status" class="apple-card calories-voice-status hidden" aria-live="polite">
           <p class="apple-caption" id="calorie-voice-status-label">Listening...</p>
@@ -302,8 +306,8 @@
 
         <div class="calories-recent-block">
           <div class="calories-recent-header">
-            <p class="apple-field-label">Recent foods</p>
-            <p class="apple-caption">Tap to log again instantly</p>
+            <p class="apple-field-label">Recent/Frequent foods</p>
+            <p class="apple-caption calories-recent-note">Tap to log again instantly</p>
           </div>
           <div id="calorie-recent-foods" class="calories-recent-foods"></div>
         </div>
@@ -557,6 +561,26 @@
             Done
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="calorie-delete-sheet" class="weight-delete-sheet hidden" aria-hidden="true">
+    <div class="weight-delete-sheet-backdrop" data-calorie-delete-dismiss></div>
+    <div class="weight-delete-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="calorie-delete-title">
+      <h3 id="calorie-delete-title" class="apple-subtitle apple-subtitle-no-margin">Delete this meal?</h3>
+      <p class="apple-caption apple-caption-tight">This action cannot be undone.</p>
+      <div class="apple-stack-sm">
+        <button type="button"
+                class="weight-sheet-btn weight-sheet-btn-danger apple-btn apple-btn-destructive"
+                data-calorie-delete-confirm>
+          Delete Meal
+        </button>
+        <button type="button"
+                class="weight-sheet-btn weight-sheet-btn-neutral apple-btn apple-btn-neutral"
+                data-calorie-delete-dismiss>
+          Cancel
+        </button>
       </div>
     </div>
   </div>

@@ -3,6 +3,7 @@ import {
   loadState,
   setUserName
 } from "./modules/storage.mjs";
+import { refreshRangeSliders } from "./modules/slider-ui.mjs";
 import { bindWeightChartThemeEvents } from "./modules/charts.mjs";
 import { render as renderDashboard } from "./views/dashboard-ui.mjs";
 import {
@@ -18,7 +19,7 @@ import {
   handleDocumentTouchStart as handleWeightsDocumentTouchStart,
   handleEscape as handleWeightsEscape,
   handleWeightSubmit,
-  onViewportChange,
+  onViewportChange as onWeightsViewportChange,
   openWeightModal,
   render as renderWeights,
   resetViewUiState as resetWeightsViewUiState,
@@ -26,8 +27,10 @@ import {
 } from "./views/weights-ui.mjs";
 import {
   handleDocumentClick as handleCaloriesDocumentClick,
+  handleDocumentTouchStart as handleCaloriesDocumentTouchStart,
   handleEscape as handleCaloriesEscape,
   handleSubmit as handleCaloriesSubmit,
+  onViewportChange as onCaloriesViewportChange,
   render as renderCalories,
   resetViewUiState as resetCaloriesViewUiState
 } from "./views/calories-ui.mjs";
@@ -300,23 +303,16 @@ function renderActiveView() {
 
   if (activeView === "dashboard") {
     renderDashboard(state);
-    return;
-  }
-
-  if (activeView === "weights") {
+  } else if (activeView === "weights") {
     renderWeights(state);
     maybeOpenWeightModalFromQuery(activeView);
-    return;
-  }
-
-  if (activeView === "profile") {
+  } else if (activeView === "profile") {
     renderProfile(state);
-    return;
-  }
-
-  if (activeView === "calories") {
+  } else if (activeView === "calories") {
     renderCalories(state);
   }
+
+  refreshRangeSliders(document);
 }
 
 function queueRender() {
@@ -412,6 +408,7 @@ function bindGlobalEvents() {
 
   document.addEventListener("touchstart", (event) => {
     handleWeightsDocumentTouchStart(event);
+    handleCaloriesDocumentTouchStart(event);
   }, { passive: true });
 
   document.addEventListener("keydown", (event) => {
@@ -422,7 +419,8 @@ function bindGlobalEvents() {
   });
 
   const handleViewportEvents = () => {
-    onViewportChange();
+    onWeightsViewportChange();
+    onCaloriesViewportChange();
     queueNavIndicatorSync();
   };
   window.addEventListener("resize", handleViewportEvents, { passive: true });

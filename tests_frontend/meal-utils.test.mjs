@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildCalorieTrackerSummary,
+  getFrequentFoods,
   getRecentFoods,
   normalizeMeals,
   scaleMealNutrition
@@ -138,6 +139,7 @@ test("buildCalorieTrackerSummary computes progress, streak, and recent foods", (
   };
 
   const summary = buildCalorieTrackerSummary(state, new Date("2026-03-27T18:30:00"));
+  const frequentFoods = getFrequentFoods(state.meals);
   const recentFoods = getRecentFoods(state.meals);
 
   assert.equal(summary.consumedCalories, 860);
@@ -147,5 +149,6 @@ test("buildCalorieTrackerSummary computes progress, streak, and recent foods", (
   assert.equal(summary.goalSource, "maintenance");
   assert.equal(summary.feedback, "You're on track");
   assert.equal(summary.reminder.title, "Log dinner?");
+  assert.deepEqual(frequentFoods.map((item) => item.name), ["Chicken bowl", "Greek yogurt", "Oatmeal"]);
   assert.deepEqual(recentFoods.map((item) => item.name), ["Chicken bowl", "Greek yogurt", "Oatmeal"]);
 });

@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -37,6 +38,20 @@ def _page_response(request: Request, full: str, partial: str):
     return response
 
 
+async def _read_upload_payload(upload: UploadFile | None):
+    if not upload:
+        return None
+
+    payload = await upload.read()
+    if not payload:
+        return None
+
+    return {
+        "encoded": base64.b64encode(payload).decode("utf-8"),
+        "content_type": upload.content_type or "image/jpeg",
+    }
+
+
 @app.get("/")
 async def dashboard(request: Request):
     return _page_response(request, "dashboard.html", "partials/dashboard_content.html")
@@ -67,14 +82,24 @@ async def analyze_calorie_entry(
     mode: str = Form(default="manual"),
     note: str = Form(default=""),
     image: UploadFile | None = File(default=None),
+    images: list[UploadFile] | None = File(default=None),
 ):
     try:
-        image_bytes = await image.read() if image else None
-        content_type = image.content_type if image else None
+        uploads = []
+        if image:
+            uploads.append(image)
+        if isinstance(images, list):
+            uploads.extend(images)
+
+        image_payloads = []
+        for upload in uploads[:3]:
+            payload = await _read_upload_payload(upload)
+            if payload:
+                image_payloads.append(payload)
+
         meal = analyze_logged_meal(
             note=note,
-            image_bytes=image_bytes,
-            content_type=content_type,
+            image_payloads=image_payloads,
             mode=mode,
         )
     except MealAnalysisError as exc:

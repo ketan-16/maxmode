@@ -4,7 +4,8 @@ export const DEFAULT_DAILY_GOAL = 2000;
 export const PORTION_MIN = 0.5;
 export const PORTION_MAX = 2.5;
 export const PORTION_STEP = 0.25;
-export const RECENT_FOOD_LIMIT = 6;
+export const RECENT_FOOD_LIMIT = 5;
+export const FREQUENT_FOOD_LIMIT = 5;
 
 const VALID_SOURCES = new Set(["scan", "manual", "voice", "recent"]);
 const VALID_CONFIDENCE = new Set(["low", "medium", "high"]);
@@ -226,6 +227,36 @@ export function getRecentFoods(meals, limit = RECENT_FOOD_LIMIT) {
   return recent;
 }
 
+export function getFrequentFoods(meals, limit = FREQUENT_FOOD_LIMIT) {
+  const source = sortMealsNewestFirst(Array.isArray(meals) ? meals : []);
+  const entriesByKey = new Map();
+
+  for (let i = 0; i < source.length; i += 1) {
+    const item = source[i];
+    if (!item || typeof item !== "object") continue;
+
+    const key = normalizeName(item.name).toLowerCase();
+    if (!entriesByKey.has(key)) {
+      entriesByKey.set(key, {
+        count: 1,
+        latestTs: new Date(item.loggedAt).getTime() || 0,
+        item
+      });
+      continue;
+    }
+
+    entriesByKey.get(key).count += 1;
+  }
+
+  return Array.from(entriesByKey.values())
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return b.latestTs - a.latestTs;
+    })
+    .slice(0, Math.max(0, limit))
+    .map((entry) => entry.item);
+}
+
 export function getMealLoggingStreak(meals, referenceDate = new Date()) {
   const source = Array.isArray(meals) ? meals : [];
   const loggedDays = new Set();
@@ -351,6 +382,7 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     todaysMeals,
     meals: allMeals,
     recentFoods: getRecentFoods(allMeals),
+    frequentFoods: getFrequentFoods(allMeals),
     reminder: getSmartReminder(allMeals, referenceDate),
     isOver: remainingCalories < 0
   };
