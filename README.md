@@ -24,6 +24,12 @@ uv run uvicorn main:app --reload
 
 Open: `http://127.0.0.1:8000`
 
+## AI Meal Parsing
+
+- The calorie tracker uses `LiteLLM` for provider-agnostic meal estimation.
+- Current dev/test default: set `OPENAI_API_KEY` in `.env`.
+- Optional provider override: set `MEAL_AI_MODEL` (for example `anthropic/...`, `openai/...`, or `vertex_ai/...`).
+
 ## Test
 
 Backend route/rendering tests:

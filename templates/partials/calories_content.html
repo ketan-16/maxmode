@@ -1,27 +1,438 @@
-<section id="calories-page-root" class="app-section">
-  <h1 class="apple-title">Calories</h1>
+<section id="calories-page-root" class="app-section calories-page">
+  <div class="calories-page-shell">
+    <div class="calories-summary-stack">
+      <section id="calories-summary-card" class="apple-card app-card calories-summary-card">
+        <div class="calories-summary-header">
+          <div class="calories-summary-copy">
+            <h1 class="apple-subtitle apple-subtitle-no-margin">Calories</h1>
+          </div>
 
-  <div id="calories-maintenance-card" class="apple-card app-card calories-maintenance-card hidden">
-    <p class="apple-overline">Maintenance Calories</p>
-    <p id="calories-maintenance-value" class="apple-metric">--</p>
-    <p id="calories-maintenance-meta" class="apple-caption">Complete your profile to calculate maintenance calories.</p>
-    <p id="calories-weight-source" class="apple-caption calories-source-note"></p>
-    <button type="button"
-            data-action="open-calorie-setup-modal"
-            class="apple-btn apple-btn-neutral apple-btn-compact calories-edit-btn">
-      Edit Details
-    </button>
+          <button type="button"
+                  data-action="open-calorie-setup-modal"
+                  class="calories-summary-edit-btn">
+            Edit
+          </button>
+        </div>
+
+        <div class="calories-progress-panel">
+          <button type="button"
+                  class="calories-radial-trigger"
+                  data-action="open-calorie-macro-modal"
+                  aria-label="Open calorie macro breakdown">
+            <span class="calories-radial-shell">
+              <svg class="calories-radial-svg" viewBox="0 0 240 160" aria-hidden="true">
+                <g transform="translate(120 120)">
+                  <line class="calories-radial-segment" data-radial-segment="0" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(-108)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="1" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(-90)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="2" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(-72)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="3" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(-54)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="4" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(-36)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="5" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(-18)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="6" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(0)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="7" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(18)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="8" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(36)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="9" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(54)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="10" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(72)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="11" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(90)"></line>
+                  <line class="calories-radial-segment" data-radial-segment="12" x1="0" y1="-82" x2="0" y2="-54" transform="rotate(108)"></line>
+                </g>
+              </svg>
+
+              <span class="calories-radial-center">
+                <span class="calories-radial-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 3c.7 2.3-.4 4.2-2 5.8-2 2-4.5 3.7-4.5 7A6.5 6.5 0 0 0 12 22a6.5 6.5 0 0 0 6.5-6.2c0-4.3-3.1-6.7-5-8.8-.8 1.8-2.5 3-4.3 3.3"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 22a3.3 3.3 0 0 0 3.3-3.2c0-1.8-1.2-2.8-2.1-3.9-.4.9-1.2 1.5-2.1 1.6-.8.1-1.7.9-1.7 2.2A3.3 3.3 0 0 0 12 22Z"></path>
+                  </svg>
+                </span>
+                <span id="calories-remaining-value" class="calories-remaining-value">--</span>
+                <span id="calories-remaining-label" class="calories-remaining-label">Remaining</span>
+              </span>
+            </span>
+          </button>
+
+          <div class="calories-summary-meta-row">
+            <p id="calories-maintenance-copy" class="calories-summary-meta-text">Maintenance --</p>
+            <span class="calories-summary-meta-dot" aria-hidden="true"></span>
+            <p id="calories-goal-copy" class="calories-summary-meta-text">Goal --</p>
+          </div>
+        </div>
+
+        <div class="calories-macro-row">
+          <article class="calories-macro-summary-item">
+            <span class="calories-macro-summary-icon calories-macro-summary-icon-protein" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.6 6.2a4.4 4.4 0 1 1 6.2 6.2l-3.5 3.5a4.4 4.4 0 0 1-6.2 0l-2.9-2.9a4.4 4.4 0 0 1 0-6.2 4.4 4.4 0 0 1 6.2 0Z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m6.2 16.3-2.3 2.3"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m3.8 15.5 1.6 1.6"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m5.7 18.7 1.6 1.6"></path>
+              </svg>
+            </span>
+            <p class="calories-macro-summary-label">Protein</p>
+            <p id="calories-protein-value" class="calories-macro-summary-value">0/ 0g</p>
+          </article>
+
+          <article class="calories-macro-summary-item">
+            <span class="calories-macro-summary-icon calories-macro-summary-icon-carbs" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 3v10"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 3v6"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 3v6"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 13v8"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 3v18"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 3c2.2 0 4 1.8 4 4v2h-4"></path>
+              </svg>
+            </span>
+            <p class="calories-macro-summary-label">Carbs</p>
+            <p id="calories-carbs-value" class="calories-macro-summary-value">0/ 0g</p>
+          </article>
+
+          <article class="calories-macro-summary-item">
+            <span class="calories-macro-summary-icon calories-macro-summary-icon-fat" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="5.5" r="2.2" stroke-width="1.8"></circle>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8.5v4"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8.5 12.5c1 .6 2.2 1 3.5 1s2.5-.4 3.5-1"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 13.5 8 20"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14 13.5 16 20"></path>
+              </svg>
+            </span>
+            <p class="calories-macro-summary-label">Fat</p>
+            <p id="calories-fat-value" class="calories-macro-summary-value">0/ 0g</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="calories-reminder-card" class="apple-card app-card calories-reminder-card hidden" aria-live="polite">
+        <div class="calories-reminder-copy">
+          <p class="apple-overline">Smart Reminder</p>
+          <p id="calories-reminder-title" class="apple-subtitle apple-subtitle-sm">Log your meal?</p>
+          <p id="calories-reminder-note" class="apple-caption">One gentle nudge a day.</p>
+        </div>
+
+        <div class="calories-reminder-actions">
+          <button type="button"
+                  class="apple-btn apple-btn-neutral apple-btn-compact"
+                  data-action="open-manual-entry-modal">
+            Manual entry
+          </button>
+          <button type="button"
+                  id="calories-reminder-enable"
+                  class="apple-btn apple-btn-primary apple-btn-compact hidden"
+                  data-action="enable-calorie-reminders">
+            Enable reminder
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <section class="calories-feed-section">
+      <div class="app-section-header calories-feed-header">
+        <div>
+          <p class="apple-overline">Meal Feed</p>
+          <h2 class="apple-subtitle apple-subtitle-no-margin">Timeline</h2>
+        </div>
+        <p id="calories-feed-meta" class="apple-caption">No meals logged yet</p>
+      </div>
+
+      <div id="calories-empty-state" class="apple-card app-card calories-empty-state">
+        <div class="calories-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 4h10"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 8l1.2 8.2A2 2 0 0 0 9.18 18h5.64a2 2 0 0 0 1.98-1.8L18 8"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 12h4"></path>
+          </svg>
+        </div>
+        <div class="calories-empty-copy">
+          <p class="apple-subtitle apple-subtitle-sm">Log your first meal in seconds</p>
+          <p class="apple-caption">Tap the camera button, confirm the estimate, and your day updates instantly.</p>
+        </div>
+      </div>
+
+      <div id="meal-feed-list" class="meal-feed-list" role="list"></div>
+    </section>
   </div>
 
-  <div id="calories-missing-card" class="apple-card app-card calories-missing-card hidden">
-    <p class="apple-subtitle apple-subtitle-no-margin">Set up your calorie profile</p>
-    <p class="apple-caption apple-caption-tight">We need a few details to calculate maintenance calories.</p>
-    <ul id="calories-missing-list" class="calories-missing-list"></ul>
-    <button type="button"
-            data-action="open-calorie-setup-modal"
-            class="apple-btn apple-btn-primary apple-btn-block">
-      Complete Setup
-    </button>
+  <div id="calories-fab-zone" class="calories-fab-zone">
+    <div id="calories-fab-menu" class="calories-fab-menu hidden" aria-hidden="true">
+      <button type="button" class="apple-btn apple-btn-neutral calories-fab-option" data-action="open-voice-entry">
+        <svg class="apple-icon apple-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3a3 3 0 0 0-3 3v5a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 18v3"></path>
+        </svg>
+        Voice input
+      </button>
+      <button type="button" class="apple-btn apple-btn-neutral calories-fab-option" data-action="open-manual-entry-modal">
+        <svg class="apple-icon apple-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5" stroke-width="1.8"></circle>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m20 20-3.5-3.5"></path>
+        </svg>
+        Manual AI entry
+      </button>
+    </div>
+
+    <div class="calories-fab-actions">
+      <button type="button"
+              id="calories-fab-more"
+              class="apple-btn apple-btn-neutral calories-fab-more"
+              data-action="toggle-calorie-fab-menu"
+              aria-expanded="false"
+              aria-controls="calories-fab-menu"
+              aria-label="Open calorie input options">
+        <svg class="apple-icon apple-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <circle cx="12" cy="5" r="1.7" fill="currentColor" stroke="none"></circle>
+          <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"></circle>
+          <circle cx="12" cy="19" r="1.7" fill="currentColor" stroke="none"></circle>
+        </svg>
+      </button>
+
+      <button type="button"
+              id="calories-fab-primary"
+              class="apple-btn apple-btn-primary calories-fab-primary"
+              data-action="trigger-scan-food">
+        <svg class="apple-icon apple-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7h3l1.4-2h7.2L17 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"></path>
+          <circle cx="12" cy="13" r="3.8" stroke-width="1.8"></circle>
+        </svg>
+        Scan food
+      </button>
+    </div>
+
+    <input type="file"
+           id="calorie-scan-input"
+           class="hidden"
+           accept="image/*"
+           capture="environment">
+  </div>
+
+  <div id="calorie-macro-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-calorie-sheet" role="dialog" aria-modal="true" aria-labelledby="calorie-macro-title">
+      <div class="apple-modal-header">
+        <div>
+          <p class="apple-overline">Macro View</p>
+          <h2 id="calorie-macro-title" class="apple-subtitle apple-subtitle-no-margin">Today's breakdown</h2>
+        </div>
+        <button type="button" class="apple-icon-btn" data-action="close-calorie-macro-modal" aria-label="Close macro view">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="calories-sheet-body">
+        <div class="calories-macro-hero">
+          <p id="calorie-macro-goal-copy" class="apple-caption">Goal is based on your daily estimate.</p>
+          <p id="calorie-macro-total-copy" class="calories-macro-total-copy">0 kcal eaten today</p>
+        </div>
+
+        <div class="calories-macro-grid">
+          <article class="apple-card calories-macro-card">
+            <div class="calories-macro-card-header">
+              <p class="apple-subtitle apple-subtitle-sm">Protein</p>
+              <p id="calorie-macro-protein-value" class="calories-macro-card-value">0g</p>
+            </div>
+            <div class="calories-macro-bar"><span id="calorie-macro-protein-bar"></span></div>
+          </article>
+
+          <article class="apple-card calories-macro-card">
+            <div class="calories-macro-card-header">
+              <p class="apple-subtitle apple-subtitle-sm">Carbs</p>
+              <p id="calorie-macro-carbs-value" class="calories-macro-card-value">0g</p>
+            </div>
+            <div class="calories-macro-bar"><span id="calorie-macro-carbs-bar"></span></div>
+          </article>
+
+          <article class="apple-card calories-macro-card">
+            <div class="calories-macro-card-header">
+              <p class="apple-subtitle apple-subtitle-sm">Fat</p>
+              <p id="calorie-macro-fat-value" class="calories-macro-card-value">0g</p>
+            </div>
+            <div class="calories-macro-bar"><span id="calorie-macro-fat-bar"></span></div>
+          </article>
+        </div>
+
+        <button type="button"
+                data-action="open-calorie-setup-modal"
+                class="apple-btn apple-btn-neutral apple-btn-block">
+          Personalize daily goal
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="calorie-manual-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-calorie-sheet" role="dialog" aria-modal="true" aria-labelledby="calorie-manual-title">
+      <div class="apple-modal-header">
+        <div>
+          <p class="apple-overline">Manual AI Entry</p>
+          <h2 id="calorie-manual-title" class="apple-subtitle apple-subtitle-no-margin">Describe your meal</h2>
+        </div>
+        <button type="button" class="apple-icon-btn" data-action="close-manual-entry-modal" aria-label="Close manual entry">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form id="calorie-manual-form" class="apple-form">
+        <label for="calorie-manual-description" class="apple-field-label">Meal description</label>
+        <textarea id="calorie-manual-description"
+                  class="apple-input calories-textarea"
+                  placeholder="Chicken bowl with rice and avocado"></textarea>
+
+        <div class="calories-photo-row">
+          <button type="button"
+                  class="apple-btn apple-btn-neutral apple-btn-compact"
+                  data-action="choose-manual-photo">
+            Add optional photo
+          </button>
+          <p id="calorie-manual-photo-name" class="apple-caption">No photo selected</p>
+        </div>
+
+        <input type="file"
+               id="calorie-manual-photo-input"
+               class="hidden"
+               accept="image/*">
+
+        <div id="calorie-voice-status" class="apple-card calories-voice-status hidden" aria-live="polite">
+          <p class="apple-caption" id="calorie-voice-status-label">Listening...</p>
+        </div>
+
+        <div class="calories-recent-block">
+          <div class="calories-recent-header">
+            <p class="apple-field-label">Recent foods</p>
+            <p class="apple-caption">Tap to log again instantly</p>
+          </div>
+          <div id="calorie-recent-foods" class="calories-recent-foods"></div>
+        </div>
+
+        <p id="calorie-manual-error" class="apple-caption calories-setup-error" aria-live="polite"></p>
+
+        <button type="submit" id="calorie-manual-submit" class="apple-btn apple-btn-primary apple-btn-block">
+          Analyze meal
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="calorie-preview-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-calorie-sheet" role="dialog" aria-modal="true" aria-labelledby="calorie-preview-title">
+      <div class="apple-modal-header">
+        <div>
+          <p id="calorie-preview-source" class="apple-overline">AI Result</p>
+          <h2 id="calorie-preview-title" class="apple-subtitle apple-subtitle-no-margin">Confirm meal</h2>
+        </div>
+        <button type="button" class="apple-icon-btn" data-action="close-calorie-preview-modal" aria-label="Close meal preview">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form id="calorie-preview-form" class="apple-form calories-preview-form">
+        <div id="calorie-preview-loading" class="apple-card calories-preview-loading hidden" aria-live="polite">
+          <div class="calories-preview-spinner" aria-hidden="true"></div>
+          <p class="apple-caption">Analyzing your meal...</p>
+        </div>
+
+        <div class="calories-preview-editor">
+          <div class="calories-preview-name-block">
+            <label for="calorie-preview-name" class="apple-field-label">Food name</label>
+            <input type="text" id="calorie-preview-name" class="apple-input" placeholder="Meal name">
+          </div>
+
+          <div class="calories-portion-block calories-preview-portion-block">
+            <div class="calories-portion-header">
+              <p class="apple-field-label calories-portion-label">Portion</p>
+              <p id="calorie-portion-value" class="calories-portion-value">1x</p>
+            </div>
+            <input type="range"
+                   id="calorie-portion-slider"
+                   min="0.5"
+                   max="2.5"
+                   step="0.25"
+                   value="1">
+          </div>
+        </div>
+
+        <div class="calories-preview-metrics">
+          <article class="apple-card calories-preview-metric">
+            <span class="calories-preview-metric-icon calories-preview-metric-icon-calories" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3c.7 2.3-.4 4.2-2 5.8-2 2-4.5 3.7-4.5 7A6.5 6.5 0 0 0 12 22a6.5 6.5 0 0 0 6.5-6.2c0-4.3-3.1-6.7-5-8.8-.8 1.8-2.5 3-4.3 3.3"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 22a3.3 3.3 0 0 0 3.3-3.2c0-1.8-1.2-2.8-2.1-3.9-.4.9-1.2 1.5-2.1 1.6-.8.1-1.7.9-1.7 2.2A3.3 3.3 0 0 0 12 22Z"></path>
+              </svg>
+            </span>
+            <div class="calories-preview-metric-copy">
+              <p class="calories-preview-metric-label">Calories</p>
+              <p id="calorie-preview-calories" class="calories-preview-metric-value">0</p>
+            </div>
+          </article>
+          <article class="apple-card calories-preview-metric">
+            <span class="calories-preview-metric-icon calories-preview-metric-icon-protein" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.6 6.2a4.4 4.4 0 1 1 6.2 6.2l-3.5 3.5a4.4 4.4 0 0 1-6.2 0l-2.9-2.9a4.4 4.4 0 0 1 0-6.2 4.4 4.4 0 0 1 6.2 0Z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m6.2 16.3-2.3 2.3"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m3.8 15.5 1.6 1.6"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m5.7 18.7 1.6 1.6"></path>
+              </svg>
+            </span>
+            <div class="calories-preview-metric-copy">
+              <p class="calories-preview-metric-label">Protein</p>
+              <p id="calorie-preview-protein" class="calories-preview-metric-value">0g</p>
+            </div>
+          </article>
+          <article class="apple-card calories-preview-metric">
+            <span class="calories-preview-metric-icon calories-preview-metric-icon-carbs" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 3v10"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 3v6"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 3v6"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 13v8"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 3v18"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 3c2.2 0 4 1.8 4 4v2h-4"></path>
+              </svg>
+            </span>
+            <div class="calories-preview-metric-copy">
+              <p class="calories-preview-metric-label">Carbs</p>
+              <p id="calorie-preview-carbs" class="calories-preview-metric-value">0g</p>
+            </div>
+          </article>
+          <article class="apple-card calories-preview-metric">
+            <span class="calories-preview-metric-icon calories-preview-metric-icon-fat" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="5.5" r="2.2" stroke-width="1.8"></circle>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8.5v4"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8.5 12.5c1 .6 2.2 1 3.5 1s2.5-.4 3.5-1"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 13.5 8 20"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14 13.5 16 20"></path>
+              </svg>
+            </span>
+            <div class="calories-preview-metric-copy">
+              <p class="calories-preview-metric-label">Fat</p>
+              <p id="calorie-preview-fat" class="calories-preview-metric-value">0g</p>
+            </div>
+          </article>
+        </div>
+
+        <p id="calorie-preview-confidence" class="apple-caption calories-preview-confidence"></p>
+        <p id="calorie-preview-error" class="apple-caption calories-setup-error" aria-live="polite"></p>
+
+        <div class="calories-preview-actions">
+          <button type="button"
+                  id="calorie-preview-delete"
+                  class="apple-btn apple-btn-destructive-outline hidden"
+                  data-action="delete-preview-meal">
+            Delete meal
+          </button>
+          <button type="submit" id="calorie-preview-submit" class="apple-btn apple-btn-primary">
+            <span id="calorie-preview-submit-label">Add meal</span>
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <div id="calorie-setup-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
@@ -30,7 +441,7 @@
         <h2 id="calorie-setup-title" class="apple-subtitle apple-subtitle-no-margin">Calorie Setup</h2>
         <button type="button" data-action="close-calorie-setup-modal" class="apple-icon-btn" aria-label="Close calorie setup">
           <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
           </svg>
         </button>
       </div>
@@ -149,4 +560,6 @@
       </div>
     </div>
   </div>
+
+  <div id="calories-page-toast" class="calorie-update-toast hidden" role="status" aria-live="polite"></div>
 </section>

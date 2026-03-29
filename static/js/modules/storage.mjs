@@ -7,15 +7,23 @@ import {
   hasCalorieProfileBasics,
   weightToKg
 } from "./calories-utils.mjs";
+import { normalizeMeals } from "./meal-utils.mjs";
 
 const KEYS = {
   USER: "maxmode_user",
-  WEIGHTS: "maxmode_weights"
+  WEIGHTS: "maxmode_weights",
+  MEALS: "maxmode_meals",
+  CALORIE_TRACKER_META: "maxmode_calorie_tracker_meta"
 };
 
 const DEFAULT_PREFERENCES = Object.freeze({
   heightUnit: "cm",
   weightUnit: "kg"
+});
+
+const DEFAULT_CALORIE_TRACKER_META = Object.freeze({
+  reminderOptIn: false,
+  lastReminderDay: ""
 });
 
 let cachedState = null;
@@ -120,6 +128,18 @@ function normalizePreferences(rawPreferences) {
   };
 }
 
+function normalizeCalorieTrackerMeta(rawMeta) {
+  const source = (rawMeta && typeof rawMeta === "object") ? rawMeta : {};
+  const lastReminderDay = (typeof source.lastReminderDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(source.lastReminderDay))
+    ? source.lastReminderDay
+    : DEFAULT_CALORIE_TRACKER_META.lastReminderDay;
+
+  return {
+    reminderOptIn: source.reminderOptIn === true,
+    lastReminderDay
+  };
+}
+
 function normalizeUser(rawUser) {
   if (!rawUser || typeof rawUser !== "object") return null;
 
@@ -150,14 +170,27 @@ function writeWeights(weights) {
   localStorage.setItem(KEYS.WEIGHTS, JSON.stringify(weights));
 }
 
+function writeMeals(meals) {
+  localStorage.setItem(KEYS.MEALS, JSON.stringify(meals));
+}
+
+function writeCalorieTrackerMeta(meta) {
+  localStorage.setItem(KEYS.CALORIE_TRACKER_META, JSON.stringify(meta));
+}
+
 function readFromStorage() {
   const rawUser = parseJson(localStorage.getItem(KEYS.USER));
   const rawWeights = parseJson(localStorage.getItem(KEYS.WEIGHTS));
+  const rawMeals = parseJson(localStorage.getItem(KEYS.MEALS));
+  const rawCalorieTrackerMeta = parseJson(localStorage.getItem(KEYS.CALORIE_TRACKER_META));
 
   const user = normalizeUser(rawUser);
   const { weights, changed } = normalizeWeights(rawWeights, new Date().toISOString());
+  const { meals, changed: mealsChanged } = normalizeMeals(rawMeals, new Date().toISOString());
+  const calorieTrackerMeta = normalizeCalorieTrackerMeta(rawCalorieTrackerMeta);
 
   if (changed) writeWeights(weights);
+  if (mealsChanged) writeMeals(meals);
 
   if (rawUser) {
     if (!user) {
@@ -167,10 +200,18 @@ function readFromStorage() {
     }
   }
 
+  if (rawCalorieTrackerMeta) {
+    if (JSON.stringify(rawCalorieTrackerMeta) !== JSON.stringify(calorieTrackerMeta)) {
+      writeCalorieTrackerMeta(calorieTrackerMeta);
+    }
+  }
+
   return {
     user,
     weights,
-    chartSeries: getChartReadyWeights(weights)
+    chartSeries: getChartReadyWeights(weights),
+    meals,
+    calorieTrackerMeta
   };
 }
 
@@ -208,6 +249,12 @@ function mergePreferences(currentPreferences, patch) {
 
 function replaceWeights(nextWeights) {
   writeWeights(nextWeights);
+  invalidateState();
+  return loadState();
+}
+
+function replaceMeals(nextMeals) {
+  writeMeals(nextMeals);
   invalidateState();
   return loadState();
 }
@@ -357,9 +404,89 @@ export function getWeightById(id) {
   return null;
 }
 
+export function getMeals(state) {
+  const source = state || loadState();
+  return Array.isArray(source.meals) ? source.meals.slice() : [];
+}
+
+export function addMeal(mealInput) {
+  const state = loadState();
+  const nowIso = new Date().toISOString();
+  const normalized = normalizeMeals([{
+    ...mealInput,
+    loggedAt: mealInput && mealInput.loggedAt ? mealInput.loggedAt : nowIso
+  }], nowIso).meals;
+
+  if (normalized.length === 0) return state;
+  return replaceMeals([normalized[0]].concat(state.meals));
+}
+
+export function updateMeal(id, mealPatch) {
+  if (!id) return false;
+
+  const state = loadState();
+  let updated = false;
+  const nowIso = new Date().toISOString();
+
+  const next = state.meals.map((entry) => {
+    if (entry.id !== id) return entry;
+    updated = true;
+    const normalized = normalizeMeals([{
+      ...entry,
+      ...mealPatch,
+      id: entry.id,
+      loggedAt: (mealPatch && mealPatch.loggedAt) ? mealPatch.loggedAt : entry.loggedAt
+    }], nowIso).meals;
+    return normalized[0] || entry;
+  });
+
+  if (!updated) return false;
+  replaceMeals(next);
+  return true;
+}
+
+export function deleteMeal(id) {
+  if (!id) return false;
+
+  const state = loadState();
+  const next = state.meals.filter((entry) => entry.id !== id);
+  if (next.length === state.meals.length) return false;
+
+  replaceMeals(next);
+  return true;
+}
+
+export function getMealById(id) {
+  if (!id) return null;
+  const state = loadState();
+  for (let i = 0; i < state.meals.length; i += 1) {
+    if (state.meals[i].id === id) return state.meals[i];
+  }
+  return null;
+}
+
+export function getCalorieTrackerMeta(state) {
+  const source = state || loadState();
+  return normalizeCalorieTrackerMeta(source.calorieTrackerMeta);
+}
+
+export function setCalorieTrackerMeta(metaPatch) {
+  const current = getCalorieTrackerMeta(loadState());
+  const next = normalizeCalorieTrackerMeta({
+    ...current,
+    ...((metaPatch && typeof metaPatch === "object") ? metaPatch : {})
+  });
+
+  writeCalorieTrackerMeta(next);
+  invalidateState();
+  return loadState();
+}
+
 export function clearAllData() {
   localStorage.removeItem(KEYS.USER);
   localStorage.removeItem(KEYS.WEIGHTS);
+  localStorage.removeItem(KEYS.MEALS);
+  localStorage.removeItem(KEYS.CALORIE_TRACKER_META);
   invalidateState();
 }
 

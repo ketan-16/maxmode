@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import patch
 
 from starlette.requests import Request
+from fastapi import HTTPException
 
 import main
 
@@ -89,6 +91,32 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.headers.get("service-worker-allowed"), "/")
         cache_control = response.headers.get("cache-control", "")
         self.assertIn("no-cache", cache_control)
+
+    @patch("main.analyze_logged_meal")
+    async def test_calorie_analysis_endpoint_returns_structured_meal(self, mock_analyze):
+        mock_analyze.return_value = {
+            "name": "Chicken bowl",
+            "calories": 620,
+            "protein": 38,
+            "carbs": 58,
+            "fat": 22,
+            "confidence": "high",
+        }
+
+        response = await main.analyze_calorie_entry(mode="manual", note="chicken rice bowl", image=None)
+
+        self.assertEqual(response.meal.name, "Chicken bowl")
+        self.assertEqual(response.meal.calories, 620)
+        self.assertEqual(response.meal.confidence, "high")
+
+    @patch("main.analyze_logged_meal")
+    async def test_calorie_analysis_endpoint_maps_input_errors_to_400(self, mock_analyze):
+        mock_analyze.side_effect = main.MealAnalysisError("Add a meal description or a photo.")
+
+        with self.assertRaises(HTTPException) as context:
+            await main.analyze_calorie_entry(mode="manual", note="", image=None)
+
+        self.assertEqual(context.exception.status_code, 400)
 
 
 if __name__ == "__main__":

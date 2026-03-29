@@ -1,4 +1,4 @@
-var CACHE_NAME = "maxmode-v18";
+var CACHE_NAME = "maxmode-v19";
 
 var PRECACHE_URLS = [
   "/",
@@ -10,10 +10,13 @@ var PRECACHE_URLS = [
   "/static/js/head-init.js",
   "/static/js/bootstrap.mjs",
   "/static/js/sw-register.js",
+  "/static/js/modules/calories-utils.mjs",
   "/static/js/modules/data-utils.mjs",
+  "/static/js/modules/meal-utils.mjs",
   "/static/js/modules/storage.mjs",
   "/static/js/modules/charts.mjs",
   "/static/js/views/dashboard-ui.mjs",
+  "/static/js/views/calories-ui.mjs",
   "/static/js/views/profile-ui.mjs",
   "/static/js/views/weights-ui.mjs",
   "/static/vendor/htmx.min.js",
