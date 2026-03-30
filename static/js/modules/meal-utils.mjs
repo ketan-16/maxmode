@@ -361,6 +361,8 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
 
   const remainingCalories = goalCalories - consumedCalories;
   const progressRatio = goalCalories > 0 ? (consumedCalories / goalCalories) : 0;
+  const overCalories = Math.max(0, consumedCalories - goalCalories);
+  const isOver = remainingCalories < 0;
 
   return {
     maintenanceCalories: goalSummary.maintenanceCalories,
@@ -372,12 +374,14 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     goalDelta: goalSummary.goalDelta,
     consumedCalories,
     remainingCalories,
+    overCalories,
     protein,
     carbs,
     fat,
     mealCount: todaysMeals.length,
     progressRatio,
     progressRatioCapped: clamp(progressRatio, 0, 1),
+    overflowProgressRatioCapped: clamp(Math.max(0, progressRatio - 1), 0, 1),
     feedback: getCalorieFeedback({
       consumedCalories,
       goalCalories,
@@ -389,6 +393,6 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     recentFoods: getRecentFoods(allMeals),
     frequentFoods: getFrequentFoods(allMeals),
     reminder: getSmartReminder(allMeals, referenceDate),
-    isOver: remainingCalories < 0
+    isOver
   };
 }

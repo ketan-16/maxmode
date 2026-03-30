@@ -164,8 +164,8 @@ function getMacroTargets(goalCalories) {
   };
 }
 
-function setRadialProgress(ratio) {
-  const segments = document.querySelectorAll("[data-radial-segment]");
+function setRadialProgress(layerName, ratio) {
+  const segments = document.querySelectorAll(`[data-radial-layer="${layerName}"][data-radial-segment]`);
   if (!segments.length) return;
 
   const boundedRatio = Math.max(0, Math.min(1, ratio || 0));
@@ -1499,13 +1499,14 @@ function renderSummaryCard(summary) {
   goalCopy.textContent = summary.goalSource === "saved-goal"
     ? `Goal ${formatCalories(summary.goalCalories)} kcal (${summary.goalLabel})`
     : `Goal ${formatCalories(summary.goalCalories)} kcal`;
-  remainingValue.textContent = formatCalories(summary.remainingCalories);
-  remainingLabel.textContent = "Remaining";
+  remainingValue.textContent = formatCalories(summary.isOver ? summary.overCalories : summary.remainingCalories);
+  remainingLabel.textContent = summary.isOver ? "Over" : "Remaining";
   proteinValue.textContent = formatMacroProgress(summary.protein, macroTargets.protein);
   carbsValue.textContent = formatMacroProgress(summary.carbs, macroTargets.carbs);
   fatValue.textContent = formatMacroProgress(summary.fat, macroTargets.fat);
 
-  setRadialProgress(summary.progressRatioCapped);
+  setRadialProgress("primary", summary.progressRatioCapped);
+  setRadialProgress("overflow", summary.overflowProgressRatioCapped);
 }
 
 function renderTrackerView(state) {

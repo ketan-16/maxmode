@@ -1558,7 +1558,6 @@ html.no-view-transition .htmx-settling {
 }
 
 .calories-radial-segment {
-  stroke: rgba(136, 141, 161, 0.22);
   stroke-width: 12;
   stroke-linecap: round;
   transition:
@@ -1566,8 +1565,20 @@ html.no-view-transition .htmx-settling {
     opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
-.calories-radial-segment.is-active {
+.calories-radial-segment-primary {
+  stroke: rgba(136, 141, 161, 0.22);
+}
+
+.calories-radial-segment-primary.is-active {
   stroke: #77d7ff;
+}
+
+.calories-radial-segment-overflow {
+  stroke: transparent;
+}
+
+.calories-radial-segment-overflow.is-active {
+  stroke: #ff9f0a;
 }
 
 .calories-radial-center {

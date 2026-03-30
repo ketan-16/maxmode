@@ -9,6 +9,54 @@ import {
   scaleMealNutrition
 } from "../static/js/modules/meal-utils.mjs";
 
+function createTrackerState(meals = []) {
+  return {
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      }
+    },
+    chartSeries: [
+      { weight: 78, timestamp: 1 }
+    ],
+    meals
+  };
+}
+
+function createMeal({ id, calories, loggedAt = "2026-03-27T12:00:00" }) {
+  return {
+    id,
+    name: `Meal ${id}`,
+    calories,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    baseCalories: calories,
+    baseProtein: 0,
+    baseCarbs: 0,
+    baseFat: 0,
+    portion: 1,
+    source: "manual",
+    confidence: "medium",
+    loggedAt
+  };
+}
+
+function assertRatioClose(actual, expected, message) {
+  assert.ok(Math.abs(actual - expected) < 1e-12, `${message}: expected ${expected}, got ${actual}`);
+}
+
 test("normalizeMeals derives canonical base values from portioned totals", () => {
   const { meals } = normalizeMeals([
     {
@@ -187,4 +235,79 @@ test("buildCalorieTrackerSummary uses a saved calorie goal when available", () =
   assert.equal(summary.goalPresetKey, "cut-moderate");
   assert.equal(summary.goalLabel, "Moderate cut");
   assert.equal(summary.goalCalories, summary.maintenanceCalories - 400);
+});
+
+test("buildCalorieTrackerSummary tracks overflow progress around the calorie goal", () => {
+  const referenceDate = new Date("2026-03-27T18:30:00");
+  const goalSummary = buildCalorieTrackerSummary(createTrackerState(), referenceDate);
+  const goalCalories = goalSummary.goalCalories;
+  const scenarios = [
+    {
+      name: "under goal",
+      consumedCalories: goalCalories - 250,
+      expected: {
+        isOver: false,
+        remainingCalories: 250,
+        overCalories: 0,
+        progressRatioCapped: (goalCalories - 250) / goalCalories,
+        overflowProgressRatioCapped: 0
+      }
+    },
+    {
+      name: "exactly at goal",
+      consumedCalories: goalCalories,
+      expected: {
+        isOver: false,
+        remainingCalories: 0,
+        overCalories: 0,
+        progressRatioCapped: 1,
+        overflowProgressRatioCapped: 0
+      }
+    },
+    {
+      name: "slightly over goal",
+      consumedCalories: goalCalories + 125,
+      expected: {
+        isOver: true,
+        remainingCalories: -125,
+        overCalories: 125,
+        progressRatioCapped: 1,
+        overflowProgressRatioCapped: 125 / goalCalories
+      }
+    },
+    {
+      name: "more than twice the goal",
+      consumedCalories: (goalCalories * 2) + 250,
+      expected: {
+        isOver: true,
+        remainingCalories: -(goalCalories + 250),
+        overCalories: goalCalories + 250,
+        progressRatioCapped: 1,
+        overflowProgressRatioCapped: 1
+      }
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    const summary = buildCalorieTrackerSummary(
+      createTrackerState([
+        createMeal({
+          id: scenario.name,
+          calories: scenario.consumedCalories
+        })
+      ]),
+      referenceDate
+    );
+
+    assert.equal(summary.consumedCalories, scenario.consumedCalories, `${scenario.name}: consumedCalories`);
+    assert.equal(summary.isOver, scenario.expected.isOver, `${scenario.name}: isOver`);
+    assert.equal(summary.remainingCalories, scenario.expected.remainingCalories, `${scenario.name}: remainingCalories`);
+    assert.equal(summary.overCalories, scenario.expected.overCalories, `${scenario.name}: overCalories`);
+    assert.equal(summary.progressRatioCapped, scenario.expected.progressRatioCapped, `${scenario.name}: progressRatioCapped`);
+    assertRatioClose(
+      summary.overflowProgressRatioCapped,
+      scenario.expected.overflowProgressRatioCapped,
+      `${scenario.name}: overflowProgressRatioCapped`
+    );
+  }
 });
