@@ -1,6 +1,7 @@
 import {
   DEFAULT_DAILY_GOAL as BASE_DEFAULT_DAILY_GOAL,
-  resolveCalorieGoalFromState
+  resolveCalorieGoalFromState,
+  resolveMacroTargetsFromState
 } from "./calories-utils.mjs";
 
 export const DEFAULT_DAILY_GOAL = BASE_DEFAULT_DAILY_GOAL;
@@ -209,13 +210,8 @@ export function getMealsForDay(meals, referenceDate = new Date()) {
   return sortMealsNewestFirst(filtered);
 }
 
-export function getMacroTargets(goalCalories) {
-  const safeGoal = Math.max(0, Math.round(goalCalories || 0));
-  return {
-    protein: Math.round((safeGoal * 0.3) / 4),
-    carbs: Math.round((safeGoal * 0.4) / 4),
-    fat: Math.round((safeGoal * 0.3) / 9)
-  };
+export function getMacroTargets(state) {
+  return resolveMacroTargetsFromState(state).macroTargets;
 }
 
 function startOfDay(value) {
@@ -445,6 +441,7 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
 
   const goalSummary = resolveCalorieGoalFromState(state);
   const goalCalories = goalSummary.goalCalories;
+  const macroSummary = resolveMacroTargetsFromState(state);
 
   const remainingCalories = goalCalories - consumedCalories;
   const progressRatio = goalCalories > 0 ? (consumedCalories / goalCalories) : 0;
@@ -459,6 +456,8 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     goalPresetKey: goalSummary.goalPresetKey,
     goalLabel: goalSummary.goalLabel,
     goalDelta: goalSummary.goalDelta,
+    macroTargets: macroSummary.macroTargets,
+    macroProfile: macroSummary.macroProfile,
     consumedCalories,
     remainingCalories,
     overCalories,

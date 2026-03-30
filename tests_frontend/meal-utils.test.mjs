@@ -197,6 +197,13 @@ test("buildCalorieTrackerSummary computes progress, streak, and recent foods", (
   assert.equal(summary.mealCount, 2);
   assert.equal(summary.streakCount, 3);
   assert.equal(summary.goalSource, "maintenance-default");
+  assert.deepEqual(summary.macroTargets, {
+    protein: 78,
+    carbs: Math.round((summary.goalCalories * 0.5) / 4),
+    fat: Math.round((summary.goalCalories * 0.3) / 9)
+  });
+  assert.equal(summary.macroProfile.goalObjective, "maintain");
+  assert.equal(summary.macroProfile.proteinMultiplierGPerKg, 1);
   assert.equal(summary.feedback, "You're on track");
   assert.equal(summary.reminder.title, "Log dinner?");
   assert.deepEqual(frequentFoods.map((item) => item.name), ["Chicken bowl", "Greek yogurt", "Oatmeal"]);
@@ -314,16 +321,107 @@ test("buildCalorieTrackerSummary tracks overflow progress around the calorie goa
   }
 });
 
-test("getMacroTargets derives 30/40/30 targets from goal calories", () => {
-  assert.deepEqual(getMacroTargets(2500), {
-    protein: 188,
-    carbs: 250,
-    fat: 83
+test("getMacroTargets uses maintenance defaults and latest bodyweight", () => {
+  const state = createTrackerState();
+  const summary = buildCalorieTrackerSummary(state, new Date("2026-03-27T18:30:00"));
+
+  assert.deepEqual(getMacroTargets(state), {
+    protein: 78,
+    carbs: Math.round((summary.goalCalories * 0.5) / 4),
+    fat: Math.round((summary.goalCalories * 0.3) / 9)
   });
-  assert.deepEqual(getMacroTargets(0), {
+});
+
+test("getMacroTargets uses cutting defaults for lose goals", () => {
+  const state = {
+    ...createTrackerState(),
+    user: {
+      ...createTrackerState().user,
+      calorieGoal: {
+        objective: "lose",
+        presetKey: "cut-moderate"
+      }
+    }
+  };
+  const summary = buildCalorieTrackerSummary(state, new Date("2026-03-27T18:30:00"));
+
+  assert.deepEqual(getMacroTargets(state), {
+    protein: 140,
+    carbs: Math.round((summary.goalCalories * 0.375) / 4),
+    fat: Math.round((summary.goalCalories * 0.275) / 9)
+  });
+  assert.equal(summary.macroProfile.goalObjective, "lose");
+  assert.equal(summary.macroProfile.proteinMultiplierGPerKg, 1.8);
+});
+
+test("getMacroTargets respects a custom persisted protein multiplier", () => {
+  const baseState = createTrackerState();
+  const state = {
+    ...baseState,
+    user: {
+      ...baseState.user,
+      calorieGoal: {
+        objective: "gain",
+        presetKey: "bulk-lean"
+      },
+      preferences: {
+        heightUnit: "cm",
+        weightUnit: "kg",
+        proteinMultiplierGPerKg: 2.2
+      }
+    }
+  };
+
+  const summary = buildCalorieTrackerSummary(state, new Date("2026-03-27T18:30:00"));
+  assert.deepEqual(getMacroTargets(state), {
+    protein: 172,
+    carbs: Math.round((summary.goalCalories * 0.5) / 4),
+    fat: Math.round((summary.goalCalories * 0.225) / 9)
+  });
+  assert.equal(summary.macroProfile.proteinMultiplierGPerKg, 2.2);
+});
+
+test("getMacroTargets keeps carbs and fat when no bodyweight is logged", () => {
+  const state = {
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      },
+      calorieGoal: {
+        objective: "gain",
+        presetKey: "bulk-lean"
+      },
+      preferences: {
+        heightUnit: "cm",
+        weightUnit: "kg",
+        proteinMultiplierGPerKg: 1.6
+      }
+    },
+    chartSeries: [],
+    meals: []
+  };
+
+  const summary = buildCalorieTrackerSummary(state, new Date("2026-03-27T18:30:00"));
+  assert.deepEqual(getMacroTargets(state), {
     protein: 0,
-    carbs: 0,
-    fat: 0
+    carbs: 250,
+    fat: 50
+  });
+  assert.deepEqual(summary.macroTargets, {
+    protein: 0,
+    carbs: 250,
+    fat: 50
   });
 });
 

@@ -5,8 +5,11 @@ import {
   CALORIE_GENDERS,
   cmToFeetInches,
   feetInchesToCm,
+  getMacroGoalDefaults,
   getCalorieGoalPreset,
   hasCalorieProfileBasics,
+  normalizeMacroGoalObjective,
+  normalizeProteinMultiplierGPerKg,
   weightToKg
 } from "./calories-utils.mjs";
 import { normalizeMeals } from "./meal-utils.mjs";
@@ -20,7 +23,8 @@ const KEYS = {
 
 const DEFAULT_PREFERENCES = Object.freeze({
   heightUnit: "cm",
-  weightUnit: "kg"
+  weightUnit: "kg",
+  proteinMultiplierGPerKg: getMacroGoalDefaults("maintain").proteinMultiplierGPerKg
 });
 
 const DEFAULT_CALORIE_TRACKER_META = Object.freeze({
@@ -121,12 +125,14 @@ function normalizeCalorieProfile(rawProfile) {
   };
 }
 
-function normalizePreferences(rawPreferences) {
+function normalizePreferences(rawPreferences, goalObjective = null) {
   const source = (rawPreferences && typeof rawPreferences === "object") ? rawPreferences : {};
+  const normalizedObjective = normalizeMacroGoalObjective(goalObjective);
 
   return {
     heightUnit: source.heightUnit === "ft-in" ? "ft-in" : DEFAULT_PREFERENCES.heightUnit,
-    weightUnit: source.weightUnit === "lb" ? "lb" : DEFAULT_PREFERENCES.weightUnit
+    weightUnit: source.weightUnit === "lb" ? "lb" : DEFAULT_PREFERENCES.weightUnit,
+    proteinMultiplierGPerKg: normalizeProteinMultiplierGPerKg(source.proteinMultiplierGPerKg, normalizedObjective)
   };
 }
 
@@ -171,13 +177,15 @@ function normalizeUser(rawUser) {
   const createdAt = (typeof rawUser.createdAt === "string" && rawUser.createdAt)
     ? rawUser.createdAt
     : new Date().toISOString();
+  const calorieGoal = normalizeCalorieGoal(rawUser.calorieGoal);
+  const preferences = normalizePreferences(rawUser.preferences, calorieGoal.objective);
 
   return {
     name,
     createdAt,
     calorieProfile: normalizeCalorieProfile(rawUser.calorieProfile),
-    calorieGoal: normalizeCalorieGoal(rawUser.calorieGoal),
-    preferences: normalizePreferences(rawUser.preferences)
+    calorieGoal,
+    preferences
   };
 }
 
@@ -262,12 +270,12 @@ function mergeCalorieProfile(currentProfile, patch) {
   });
 }
 
-function mergePreferences(currentPreferences, patch) {
+function mergePreferences(currentPreferences, patch, goalObjective = null) {
   const sourcePatch = (patch && typeof patch === "object") ? patch : {};
   return normalizePreferences({
-    ...normalizePreferences(currentPreferences),
+    ...normalizePreferences(currentPreferences, goalObjective),
     ...sourcePatch
-  });
+  }, goalObjective);
 }
 
 function mergeCalorieGoal(currentGoal, patch) {
@@ -321,7 +329,7 @@ export function setUserName(name) {
     : normalizeCalorieGoal(null);
   const preferences = current.user && current.user.preferences
     ? current.user.preferences
-    : normalizePreferences(null);
+    : normalizePreferences(null, calorieGoal.objective);
 
   return setUser({
     name: trimmed,
@@ -360,24 +368,45 @@ export function setCalorieGoal(goalPatch) {
   const current = loadState();
   if (!current.user) return current;
 
+  const currentGoal = normalizeCalorieGoal(current.user.calorieGoal);
   const calorieGoal = mergeCalorieGoal(current.user.calorieGoal, goalPatch);
+  const previousObjective = normalizeMacroGoalObjective(currentGoal.objective);
+  const nextObjective = normalizeMacroGoalObjective(calorieGoal.objective);
+  const preferences = previousObjective !== nextObjective
+    ? mergePreferences(
+      current.user.preferences,
+      {
+        proteinMultiplierGPerKg: getMacroGoalDefaults(nextObjective).proteinMultiplierGPerKg
+      },
+      nextObjective
+    )
+    : mergePreferences(current.user.preferences, null, nextObjective);
+
   return setUser({
     ...current.user,
-    calorieGoal
+    calorieGoal,
+    preferences
   });
 }
 
 export function getUserPreferences(state) {
   const source = state || loadState();
-  if (!source.user) return normalizePreferences(null);
-  return normalizePreferences(source.user.preferences);
+  const goalObjective = source && source.user && source.user.calorieGoal
+    ? source.user.calorieGoal.objective
+    : null;
+  if (!source.user) return normalizePreferences(null, goalObjective);
+  return normalizePreferences(source.user.preferences, goalObjective);
 }
 
 export function setUserPreferences(preferencesPatch) {
   const current = loadState();
   if (!current.user) return current;
 
-  const preferences = mergePreferences(current.user.preferences, preferencesPatch);
+  const preferences = mergePreferences(
+    current.user.preferences,
+    preferencesPatch,
+    current.user.calorieGoal ? current.user.calorieGoal.objective : null
+  );
   return setUser({
     ...current.user,
     preferences

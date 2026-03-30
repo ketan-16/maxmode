@@ -61,6 +61,8 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="dashboard-page-root"', body)
         self.assertIn('id="dashboard-goal-card"', body)
         self.assertIn('id="dashboard-macro-card"', body)
+        self.assertIn('id="dashboard-macro-center-value"', body)
+        self.assertNotIn("30/40/30", body)
         self.assertIn('id="dashboard-weight-summary-card"', body)
         self.assertIn('id="dashboard-weekly-card"', body)
         self.assertIn('id="dashboard-streak-card"', body)
@@ -85,6 +87,9 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         response = await main.profile(make_request("/profile", hx=True))
         self.assertEqual(response.template.name, "partials/profile_content.html")
         self.assertEqual(response.headers.get("vary"), "HX-Request")
+        body = response.body.decode("utf-8")
+        self.assertIn('id="profile-protein-multiplier-input"', body)
+        self.assertIn('id="profile-protein-target-input"', body)
 
     async def test_vary_header_for_hx_routes(self):
         for path, handler in (

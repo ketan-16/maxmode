@@ -46,7 +46,8 @@ test("legacy users without preferences normalize to defaults", () => {
   });
   assert.deepEqual(state.user.preferences, {
     heightUnit: "cm",
-    weightUnit: "kg"
+    weightUnit: "kg",
+    proteinMultiplierGPerKg: 1
   });
 });
 
@@ -58,21 +59,60 @@ test("setUserPreferences supports partial updates and persists", () => {
 
   assert.deepEqual(storage.getUserPreferences(state), {
     heightUnit: "cm",
-    weightUnit: "lb"
+    weightUnit: "lb",
+    proteinMultiplierGPerKg: 1
   });
 
   state = storage.setUserPreferences({ heightUnit: "ft-in" });
 
   assert.deepEqual(storage.getUserPreferences(state), {
     heightUnit: "ft-in",
-    weightUnit: "lb"
+    weightUnit: "lb",
+    proteinMultiplierGPerKg: 1
   });
 
   const reloaded = storage.loadState();
   assert.deepEqual(storage.getUserPreferences(reloaded), {
     heightUnit: "ft-in",
-    weightUnit: "lb"
+    weightUnit: "lb",
+    proteinMultiplierGPerKg: 1
   });
+});
+
+test("legacy users normalize protein multiplier from the active goal bucket", () => {
+  resetStorage();
+
+  localStorage.setItem("maxmode_user", JSON.stringify({
+    name: "Goal Defaults",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    calorieGoal: {
+      objective: "gain",
+      presetKey: "bulk-lean"
+    },
+    preferences: {
+      heightUnit: "cm",
+      weightUnit: "kg"
+    }
+  }));
+
+  const state = storage.loadState();
+  assert.deepEqual(storage.getUserPreferences(state), {
+    heightUnit: "cm",
+    weightUnit: "kg",
+    proteinMultiplierGPerKg: 1.6
+  });
+});
+
+test("custom protein multiplier persists across reloads", () => {
+  resetStorage();
+
+  storage.setUserName("Protein Prefs");
+  let state = storage.setUserPreferences({ proteinMultiplierGPerKg: 2.15 });
+
+  assert.equal(storage.getUserPreferences(state).proteinMultiplierGPerKg, 2.15);
+
+  state = storage.loadState();
+  assert.equal(storage.getUserPreferences(state).proteinMultiplierGPerKg, 2.15);
 });
 
 test("calorie goals persist across reloads", () => {
@@ -94,6 +134,44 @@ test("calorie goals persist across reloads", () => {
     objective: "gain",
     presetKey: "bulk-lean"
   });
+});
+
+test("changing goal bucket resets protein multiplier to the new goal default", () => {
+  resetStorage();
+
+  storage.setUserName("Goal Reset");
+  let state = storage.setCalorieGoal({
+    objective: "lose",
+    presetKey: "cut-moderate"
+  });
+
+  state = storage.setUserPreferences({ proteinMultiplierGPerKg: 2.25 });
+  assert.equal(storage.getUserPreferences(state).proteinMultiplierGPerKg, 2.25);
+
+  state = storage.setCalorieGoal({
+    objective: "gain",
+    presetKey: "bulk-lean"
+  });
+
+  assert.equal(storage.getUserPreferences(state).proteinMultiplierGPerKg, 1.6);
+});
+
+test("changing presets within the same goal bucket keeps the custom protein multiplier", () => {
+  resetStorage();
+
+  storage.setUserName("Goal Stable");
+  let state = storage.setCalorieGoal({
+    objective: "lose",
+    presetKey: "cut-slow"
+  });
+
+  state = storage.setUserPreferences({ proteinMultiplierGPerKg: 2.05 });
+  state = storage.setCalorieGoal({
+    objective: "lose",
+    presetKey: "cut-aggressive"
+  });
+
+  assert.equal(storage.getUserPreferences(state).proteinMultiplierGPerKg, 2.05);
 });
 
 test("calorie goal normalization salvages valid presets safely", () => {

@@ -28,7 +28,6 @@ import { escapeHtml, formatTime, getHeightDisplay } from "../modules/data-utils.
 import {
   buildCalorieTrackerSummary,
   clampPortion,
-  getMacroTargets,
   getLocalDayKey
 } from "../modules/meal-utils.mjs";
 import { syncRangeInputVisual } from "../modules/slider-ui.mjs";
@@ -129,6 +128,17 @@ function formatCountLabel(count, singular, plural = null) {
 function formatCalories(value) {
   const normalized = Math.max(0, Math.round(value || 0));
   return normalized.toLocaleString();
+}
+
+function formatDecimal(value) {
+  const normalized = Math.round((value || 0) * 100) / 100;
+  if (!Number.isFinite(normalized)) return "--";
+  return normalized.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function formatPercent(value) {
+  const normalized = (typeof value === "number" && Number.isFinite(value)) ? (value * 100) : 0;
+  return `${formatDecimal(normalized)}%`;
 }
 
 function formatSignedCalories(value) {
@@ -1397,13 +1407,15 @@ function renderMacroModal(summary) {
   };
   const totalMacroCalories = macroCalories.protein + macroCalories.carbs + macroCalories.fat;
   const goalText = `${formatCalories(summary.goalCalories)} kcal`;
+  const macroProfile = summary.macroProfile;
+  const macroPlanText = `${formatDecimal(macroProfile.proteinMultiplierDisplayValue)} ${macroProfile.proteinMultiplierDisplayUnit} protein • ${formatPercent(macroProfile.carbPercent)} carbs • ${formatPercent(macroProfile.fatPercent)} fat`;
 
   if (summary.goalSource === "saved-goal") {
-    goalCopy.textContent = `Goal uses ${summary.goalLabel}: ${goalText}.`;
+    goalCopy.textContent = `Goal uses ${summary.goalLabel}: ${goalText}. Macro plan: ${macroPlanText}.`;
   } else if (summary.goalSource === "maintenance-default") {
-    goalCopy.textContent = `Goal matches your maintenance estimate: ${goalText}.`;
+    goalCopy.textContent = `Goal matches your maintenance estimate: ${goalText}. Macro plan: ${macroPlanText}.`;
   } else {
-    goalCopy.textContent = `Goal is using the quick default estimate: ${goalText}.`;
+    goalCopy.textContent = `Goal is using the quick default estimate: ${goalText}. Macro plan: ${macroPlanText}.`;
   }
   totalCopy.textContent = `${formatCalories(summary.consumedCalories)} kcal eaten today`;
   proteinValue.textContent = `${summary.protein}g`;
@@ -1483,7 +1495,7 @@ function renderSummaryCard(summary) {
     return;
   }
 
-  const macroTargets = getMacroTargets(summary.goalCalories);
+  const macroTargets = summary.macroTargets;
 
   maintenanceCopy.textContent = summary.maintenanceCalories
     ? `Maintenance ${formatCalories(summary.maintenanceCalories)} kcal`

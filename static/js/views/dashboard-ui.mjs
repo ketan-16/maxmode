@@ -11,8 +11,7 @@ import { renderDashboardWeightChart } from "../modules/charts.mjs";
 import { getUserPreferences } from "../modules/storage.mjs";
 import {
   buildCalorieTrackerSummary,
-  buildWeeklyCalorieIntakeSeries,
-  getMacroTargets
+  buildWeeklyCalorieIntakeSeries
 } from "../modules/meal-utils.mjs";
 
 const MACRO_RING_RADII = Object.freeze({
@@ -26,6 +25,17 @@ const MEAL_ROW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 function formatCalories(value) {
   const normalized = Math.max(0, Math.round(value || 0));
   return normalized.toLocaleString();
+}
+
+function formatDecimal(value) {
+  const normalized = Math.round((value || 0) * 100) / 100;
+  if (!Number.isFinite(normalized)) return "--";
+  return normalized.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function formatPercent(value) {
+  const normalized = (typeof value === "number" && Number.isFinite(value)) ? (value * 100) : 0;
+  return `${formatDecimal(normalized)}%`;
 }
 
 function setTextContent(id, value) {
@@ -73,7 +83,8 @@ function renderGoalCard(summary) {
 }
 
 function renderMacroCard(summary) {
-  const targets = getMacroTargets(summary.goalCalories);
+  const targets = summary.macroTargets;
+  const macroProfile = summary.macroProfile;
 
   setMacroRingProgress(
     "dashboard-macro-ring-protein",
@@ -97,6 +108,10 @@ function renderMacroCard(summary) {
   setTextContent("dashboard-macro-protein-target", `Goal ${formatCalories(targets.protein)}g`);
   setTextContent("dashboard-macro-carbs-target", `Goal ${formatCalories(targets.carbs)}g`);
   setTextContent("dashboard-macro-fat-target", `Goal ${formatCalories(targets.fat)}g`);
+  setTextContent(
+    "dashboard-macro-center-value",
+    `${formatDecimal(macroProfile.proteinMultiplierDisplayValue)} ${macroProfile.proteinMultiplierDisplayUnit} • ${formatPercent(macroProfile.carbPercent)} • ${formatPercent(macroProfile.fatPercent)}`
+  );
 }
 
 function renderWeightCard(state, preferredWeightUnit) {

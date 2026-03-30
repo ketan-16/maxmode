@@ -2,14 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  calculateProteinMultiplierFromTarget,
+  calculateProteinTargetGrams,
   calculateBmr,
   calculateMaintenanceCalories,
   calculateMaintenanceFromState,
   cmToFeetInches,
+  convertProteinMultiplierToCanonical,
+  convertProteinMultiplierToDisplay,
   feetInchesToCm,
   getCalorieMissingReasons,
   kgToLb,
   lbToKg,
+  resolveMacroTargetsFromState,
   resolveCalorieGoalFromState,
   weightToKg
 } from "../static/js/modules/calories-utils.mjs";
@@ -34,6 +39,27 @@ test("weight conversion utilities support kg and lb", () => {
 
   assert.equal(Math.round(weightToKg(180, "lb") * 1000) / 1000, 81.647);
   assert.equal(weightToKg(82, "kg"), 82);
+});
+
+test("protein multiplier helpers convert cleanly for lb display", () => {
+  const display = convertProteinMultiplierToDisplay(1.6, "lb");
+  assert.equal(display.unit, "g/lb");
+  assert.equal(display.value, 0.73);
+  assert.equal(convertProteinMultiplierToCanonical(display.value, "lb"), 1.61);
+});
+
+test("protein target helpers sync grams and canonical multiplier", () => {
+  const multiplier = calculateProteinMultiplierFromTarget({
+    weightKg: 75,
+    proteinTargetGrams: 150
+  });
+
+  assert.equal(multiplier, 2);
+  assert.equal(calculateProteinTargetGrams({
+    weightKg: 75,
+    proteinMultiplierGPerKg: multiplier
+  }), 150);
+  assert.equal(convertProteinMultiplierToDisplay(multiplier, "lb").value, 0.91);
 });
 
 test("BMR equations return expected values for male and female", () => {
@@ -175,6 +201,45 @@ test("goal resolver falls back cleanly when maintenance cannot be calculated", (
   assert.equal(summary.goalSource, "estimated-default");
   assert.equal(summary.goalCalories, 2000);
   assert.equal(summary.goalPresetKey, "bulk-dirty");
+});
+
+test("macro resolver exposes lb display metadata while keeping canonical multiplier in kg", () => {
+  const summary = resolveMacroTargetsFromState({
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      },
+      calorieGoal: {
+        objective: "gain",
+        presetKey: "bulk-lean"
+      },
+      preferences: {
+        heightUnit: "cm",
+        weightUnit: "lb",
+        proteinMultiplierGPerKg: 1.6
+      }
+    },
+    chartSeries: [
+      { weight: 78, timestamp: 1 }
+    ]
+  });
+
+  assert.equal(summary.macroProfile.goalObjective, "gain");
+  assert.equal(summary.macroProfile.proteinMultiplierGPerKg, 1.6);
+  assert.equal(summary.macroProfile.proteinMultiplierDisplayUnit, "g/lb");
+  assert.equal(summary.macroProfile.proteinMultiplierDisplayValue, 0.73);
+  assert.equal(summary.macroTargets.protein, 125);
 });
 
 test("missing reason helper reports required gaps", () => {

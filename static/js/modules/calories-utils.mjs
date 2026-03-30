@@ -44,6 +44,30 @@ export const ACTIVITY_OPTIONS = [
 export const DEFAULT_DAILY_GOAL = 2000;
 
 export const CALORIE_GOAL_OBJECTIVES = ["lose", "maintain", "gain"];
+export const DEFAULT_MACRO_GOAL_OBJECTIVE = "maintain";
+export const MACRO_GOAL_DEFAULTS = Object.freeze({
+  lose: Object.freeze({
+    objective: "lose",
+    label: "Cutting",
+    proteinMultiplierGPerKg: 1.8,
+    carbPercent: 0.375,
+    fatPercent: 0.275
+  }),
+  maintain: Object.freeze({
+    objective: "maintain",
+    label: "Maintenance",
+    proteinMultiplierGPerKg: 1,
+    carbPercent: 0.5,
+    fatPercent: 0.3
+  }),
+  gain: Object.freeze({
+    objective: "gain",
+    label: "Bulk",
+    proteinMultiplierGPerKg: 1.6,
+    carbPercent: 0.5,
+    fatPercent: 0.225
+  })
+});
 
 export const CALORIE_GOAL_PRESETS = Object.freeze([
   {
@@ -156,6 +180,15 @@ function parseNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function roundToTwo(value) {
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value * 100) / 100;
+}
+
+function normalizeWeightUnit(unit) {
+  return unit === "lb" ? "lb" : "kg";
+}
+
 export function cmToFeetInches(cmValue) {
   const cm = parseNumber(cmValue);
   if (!cm || cm <= 0) return { ft: 0, in: 0 };
@@ -248,6 +281,105 @@ export function getCalorieGoalPreset(presetKey) {
 export function getCalorieGoalPresets(objective = null) {
   if (!objective) return CALORIE_GOAL_PRESETS.slice();
   return CALORIE_GOAL_PRESETS.filter((preset) => preset.objective === objective);
+}
+
+export function normalizeMacroGoalObjective(objective) {
+  return CALORIE_GOAL_OBJECTIVES.includes(objective)
+    ? objective
+    : DEFAULT_MACRO_GOAL_OBJECTIVE;
+}
+
+export function getMacroGoalDefaults(objective = null) {
+  return MACRO_GOAL_DEFAULTS[normalizeMacroGoalObjective(objective)];
+}
+
+export function normalizeProteinMultiplierGPerKg(value, goalObjective = null) {
+  const parsed = parseNumber(value);
+  if (parsed === null || parsed <= 0) {
+    return getMacroGoalDefaults(goalObjective).proteinMultiplierGPerKg;
+  }
+
+  return roundToTwo(parsed) || getMacroGoalDefaults(goalObjective).proteinMultiplierGPerKg;
+}
+
+export function convertProteinMultiplierToDisplay(multiplierGPerKg, preferredWeightUnit = "kg") {
+  const canonical = parseNumber(multiplierGPerKg);
+  const unit = normalizeWeightUnit(preferredWeightUnit);
+  if (canonical === null || canonical <= 0) {
+    return {
+      value: null,
+      unit: unit === "lb" ? "g/lb" : "g/kg"
+    };
+  }
+
+  const displayValue = unit === "lb" ? canonical * LB_TO_KG : canonical;
+  return {
+    value: roundToTwo(displayValue),
+    unit: unit === "lb" ? "g/lb" : "g/kg"
+  };
+}
+
+export function convertProteinMultiplierToCanonical(displayValue, preferredWeightUnit = "kg") {
+  const parsed = parseNumber(displayValue);
+  if (parsed === null || parsed <= 0) return null;
+
+  const unit = normalizeWeightUnit(preferredWeightUnit);
+  const canonical = unit === "lb" ? (parsed / LB_TO_KG) : parsed;
+  return roundToTwo(canonical);
+}
+
+export function calculateProteinTargetGrams({ weightKg, proteinMultiplierGPerKg }) {
+  const normalizedWeightKg = parseNumber(weightKg);
+  const normalizedMultiplier = parseNumber(proteinMultiplierGPerKg);
+
+  if (normalizedWeightKg === null || normalizedWeightKg <= 0 || normalizedMultiplier === null || normalizedMultiplier <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(normalizedWeightKg * normalizedMultiplier));
+}
+
+export function calculateProteinMultiplierFromTarget({ weightKg, proteinTargetGrams }) {
+  const normalizedWeightKg = parseNumber(weightKg);
+  const normalizedProteinTarget = parseNumber(proteinTargetGrams);
+
+  if (normalizedWeightKg === null || normalizedWeightKg <= 0 || normalizedProteinTarget === null || normalizedProteinTarget <= 0) {
+    return null;
+  }
+
+  return roundToTwo(normalizedProteinTarget / normalizedWeightKg);
+}
+
+export function resolveMacroTargets({
+  goalCalories,
+  goalObjective,
+  preferredWeightUnit = "kg",
+  proteinMultiplierGPerKg,
+  weightKg
+}) {
+  const defaults = getMacroGoalDefaults(goalObjective);
+  const normalizedGoalCalories = Math.max(0, Math.round(parseNumber(goalCalories) || 0));
+  const normalizedMultiplier = normalizeProteinMultiplierGPerKg(proteinMultiplierGPerKg, defaults.objective);
+  const multiplierDisplay = convertProteinMultiplierToDisplay(normalizedMultiplier, preferredWeightUnit);
+
+  return {
+    macroTargets: {
+      protein: calculateProteinTargetGrams({
+        weightKg,
+        proteinMultiplierGPerKg: normalizedMultiplier
+      }),
+      carbs: Math.max(0, Math.round((normalizedGoalCalories * defaults.carbPercent) / 4)),
+      fat: Math.max(0, Math.round((normalizedGoalCalories * defaults.fatPercent) / 9))
+    },
+    macroProfile: {
+      goalObjective: defaults.objective,
+      proteinMultiplierGPerKg: normalizedMultiplier,
+      proteinMultiplierDisplayValue: multiplierDisplay.value,
+      proteinMultiplierDisplayUnit: multiplierDisplay.unit,
+      carbPercent: defaults.carbPercent,
+      fatPercent: defaults.fatPercent
+    }
+  };
 }
 
 function normalizeAge(ageValue) {
@@ -465,4 +597,21 @@ export function resolveCalorieGoalFromState(state) {
     goalLabel: savedGoal ? savedGoal.preset.title : "Default estimate",
     goalDelta: savedGoal ? savedGoal.preset.delta : null
   };
+}
+
+export function resolveMacroTargetsFromState(state) {
+  const source = state && typeof state === "object" ? state : {};
+  const user = source.user && typeof source.user === "object" ? source.user : null;
+  const preferences = user && user.preferences && typeof user.preferences === "object"
+    ? user.preferences
+    : null;
+  const goalSummary = resolveCalorieGoalFromState(source);
+
+  return resolveMacroTargets({
+    goalCalories: goalSummary.goalCalories,
+    goalObjective: goalSummary.goalObjective,
+    preferredWeightUnit: preferences && preferences.weightUnit === "lb" ? "lb" : "kg",
+    proteinMultiplierGPerKg: preferences ? preferences.proteinMultiplierGPerKg : null,
+    weightKg: getLatestWeightKg(source)
+  });
 }

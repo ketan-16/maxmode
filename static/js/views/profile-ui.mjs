@@ -7,8 +7,13 @@ import {
 } from "../modules/storage.mjs";
 import {
   ACTIVITY_OPTIONS,
+  calculateProteinMultiplierFromTarget,
+  calculateProteinTargetGrams,
   cmToFeetInches,
+  convertProteinMultiplierToCanonical,
+  convertProteinMultiplierToDisplay,
   feetInchesToCm,
+  getMacroGoalDefaults,
   formatActivityLevel,
   getLatestWeightKg
 } from "../modules/calories-utils.mjs";
@@ -83,6 +88,159 @@ function setProfileSegmentValue(inputId, value) {
 function roundToTwo(value) {
   if (!Number.isFinite(value)) return null;
   return Math.round(value * 100) / 100;
+}
+
+function formatDecimal(value) {
+  const normalized = roundToTwo(value);
+  if (normalized === null) return "--";
+  return normalized.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function getCurrentMacroDefaults(state) {
+  const goalObjective = state && state.user && state.user.calorieGoal
+    ? state.user.calorieGoal.objective
+    : null;
+  return getMacroGoalDefaults(goalObjective);
+}
+
+function getProteinInputs() {
+  return {
+    multiplierInput: document.getElementById("profile-protein-multiplier-input"),
+    multiplierUnit: document.getElementById("profile-protein-multiplier-unit"),
+    targetInput: document.getElementById("profile-protein-target-input"),
+    status: document.getElementById("profile-protein-status")
+  };
+}
+
+function renderProteinStatus({ state, proteinMultiplierGPerKg }) {
+  const { status } = getProteinInputs();
+  if (!status) return;
+
+  const preferences = getUserPreferences(state);
+  const defaults = getCurrentMacroDefaults(state);
+  const defaultDisplay = convertProteinMultiplierToDisplay(defaults.proteinMultiplierGPerKg, preferences.weightUnit);
+  const latestWeightKg = getLatestWeightKg(state);
+
+  if (!latestWeightKg) {
+    status.textContent = `Current ${defaults.label} default is ${formatDecimal(defaultDisplay.value)} ${defaultDisplay.unit}. Log a body weight to unlock grams/day editing.`;
+    return;
+  }
+
+  const currentDisplay = convertProteinMultiplierToDisplay(proteinMultiplierGPerKg, preferences.weightUnit);
+  const proteinTarget = calculateProteinTargetGrams({
+    weightKg: latestWeightKg,
+    proteinMultiplierGPerKg
+  });
+
+  status.textContent = `Current ${defaults.label} default is ${formatDecimal(defaultDisplay.value)} ${defaultDisplay.unit}. Your active target is ${proteinTarget} g/day at ${formatDecimal(currentDisplay.value)} ${currentDisplay.unit}.`;
+}
+
+function renderProteinSettings(state) {
+  const { multiplierInput, multiplierUnit, targetInput } = getProteinInputs();
+  if (!multiplierInput || !multiplierUnit || !targetInput) return;
+
+  const preferences = getUserPreferences(state);
+  const latestWeightKg = getLatestWeightKg(state);
+  const multiplierDisplay = convertProteinMultiplierToDisplay(
+    preferences.proteinMultiplierGPerKg,
+    preferences.weightUnit
+  );
+  const proteinTarget = calculateProteinTargetGrams({
+    weightKg: latestWeightKg,
+    proteinMultiplierGPerKg: preferences.proteinMultiplierGPerKg
+  });
+
+  multiplierInput.value = multiplierDisplay.value === null ? "" : formatDecimal(multiplierDisplay.value);
+  multiplierUnit.textContent = multiplierDisplay.unit;
+  targetInput.disabled = !latestWeightKg;
+  targetInput.placeholder = latestWeightKg ? "e.g. 140" : "Log weight first";
+  targetInput.value = latestWeightKg ? String(proteinTarget) : "";
+
+  renderProteinStatus({
+    state,
+    proteinMultiplierGPerKg: preferences.proteinMultiplierGPerKg
+  });
+}
+
+function previewProteinFromMultiplier() {
+  const { multiplierInput, targetInput } = getProteinInputs();
+  if (!multiplierInput || !targetInput) return;
+
+  const state = latestState || loadState();
+  const preferences = getUserPreferences(state);
+  const latestWeightKg = getLatestWeightKg(state);
+  const canonicalMultiplier = convertProteinMultiplierToCanonical(multiplierInput.value, preferences.weightUnit);
+
+  if (canonicalMultiplier === null) return;
+
+  if (latestWeightKg) {
+    targetInput.value = String(calculateProteinTargetGrams({
+      weightKg: latestWeightKg,
+      proteinMultiplierGPerKg: canonicalMultiplier
+    }));
+  }
+
+  renderProteinStatus({
+    state,
+    proteinMultiplierGPerKg: canonicalMultiplier
+  });
+}
+
+function previewProteinFromTarget() {
+  const { multiplierInput, targetInput } = getProteinInputs();
+  if (!multiplierInput || !targetInput) return;
+
+  const state = latestState || loadState();
+  const preferences = getUserPreferences(state);
+  const latestWeightKg = getLatestWeightKg(state);
+  if (!latestWeightKg) return;
+
+  const canonicalMultiplier = calculateProteinMultiplierFromTarget({
+    weightKg: latestWeightKg,
+    proteinTargetGrams: targetInput.value
+  });
+  if (canonicalMultiplier === null) return;
+
+  const multiplierDisplay = convertProteinMultiplierToDisplay(canonicalMultiplier, preferences.weightUnit);
+  multiplierInput.value = multiplierDisplay.value === null ? "" : formatDecimal(multiplierDisplay.value);
+  renderProteinStatus({
+    state,
+    proteinMultiplierGPerKg: canonicalMultiplier
+  });
+}
+
+function persistProteinSettings(sourceField) {
+  const { multiplierInput, targetInput } = getProteinInputs();
+  if (!multiplierInput || !targetInput) return false;
+
+  const state = latestState || loadState();
+  const preferences = getUserPreferences(state);
+  const latestWeightKg = getLatestWeightKg(state);
+
+  let canonicalMultiplier = null;
+  if (sourceField === "target") {
+    canonicalMultiplier = calculateProteinMultiplierFromTarget({
+      weightKg: latestWeightKg,
+      proteinTargetGrams: targetInput.value
+    });
+  } else {
+    canonicalMultiplier = convertProteinMultiplierToCanonical(multiplierInput.value, preferences.weightUnit);
+  }
+
+  if (canonicalMultiplier === null) return false;
+
+  latestState = setUserPreferences({ proteinMultiplierGPerKg: canonicalMultiplier });
+  renderProteinSettings(latestState);
+  return true;
+}
+
+function resetProteinGoalDefault() {
+  const state = latestState || loadState();
+  const defaults = getCurrentMacroDefaults(state);
+  latestState = setUserPreferences({
+    proteinMultiplierGPerKg: defaults.proteinMultiplierGPerKg
+  });
+  renderProteinSettings(latestState);
 }
 
 function iconForActivity(icon) {
@@ -346,6 +504,7 @@ function persistPreferences(preferencePatch) {
   renderPreferences(preferences);
   populateCalorieForm(profile, preferences);
   renderLatestWeight(latestState);
+  renderProteinSettings(latestState);
 }
 
 function saveActivityLevel() {
@@ -382,6 +541,11 @@ function bindProfileEvents() {
 
       if (actionName === "save-profile-activity") {
         saveActivityLevel();
+        return;
+      }
+
+      if (actionName === "reset-protein-goal-default") {
+        resetProteinGoalDefault();
         return;
       }
     }
@@ -435,6 +599,16 @@ function bindProfileEvents() {
       || id === "profile-height-ft-input"
       || id === "profile-height-in-input") {
       persistProfileFields();
+      return;
+    }
+
+    if (id === "profile-protein-multiplier-input") {
+      previewProteinFromMultiplier();
+      return;
+    }
+
+    if (id === "profile-protein-target-input") {
+      previewProteinFromTarget();
     }
   });
 
@@ -461,6 +635,20 @@ function bindProfileEvents() {
     if (id === "profile-pref-weight-unit") {
       const nextUnit = event.target.value === "lb" ? "lb" : "kg";
       persistPreferences({ weightUnit: nextUnit });
+      return;
+    }
+
+    if (id === "profile-protein-multiplier-input") {
+      if (!persistProteinSettings("multiplier")) {
+        renderProteinSettings(latestState || loadState());
+      }
+      return;
+    }
+
+    if (id === "profile-protein-target-input") {
+      if (!persistProteinSettings("target")) {
+        renderProteinSettings(latestState || loadState());
+      }
     }
   });
 }
@@ -498,6 +686,7 @@ export function render(state) {
   populateCalorieForm(user.calorieProfile, preferences);
   renderPreferences(preferences);
   renderLatestWeight(latestState);
+  renderProteinSettings(latestState);
   renderActivityText(user.calorieProfile ? user.calorieProfile.activityLevel : null);
   syncProfileSegmentedControl("profile-gender-input");
   syncProfileSegmentedControl("profile-pref-height-unit");

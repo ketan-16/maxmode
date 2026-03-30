@@ -153,6 +153,52 @@
     </div>
   </div>
 
+  <div class="apple-card app-card profile-advanced-card">
+    <div class="profile-advanced-header">
+      <div class="profile-advanced-copy">
+        <h2 class="apple-subtitle apple-subtitle-no-margin">Advanced</h2>
+        <p class="apple-caption apple-caption-tight">Protein defaults follow your current goal and reset when you switch between Cutting, Maintenance, and Bulk.</p>
+      </div>
+      <button type="button"
+              data-action="reset-protein-goal-default"
+              class="apple-btn apple-btn-neutral apple-btn-compact">
+        Reset to goal default
+      </button>
+    </div>
+
+    <div class="profile-advanced-grid">
+      <div>
+        <label for="profile-protein-multiplier-input" class="apple-field-label">Protein multiplier</label>
+        <div class="profile-inline-input">
+          <input type="number"
+                 id="profile-protein-multiplier-input"
+                 min="0.1"
+                 step="0.01"
+                 inputmode="decimal"
+                 class="apple-input profile-input"
+                 placeholder="1.00">
+          <span id="profile-protein-multiplier-unit" class="profile-inline-input-unit">g/kg</span>
+        </div>
+      </div>
+
+      <div>
+        <label for="profile-protein-target-input" class="apple-field-label">Protein target</label>
+        <div class="profile-inline-input">
+          <input type="number"
+                 id="profile-protein-target-input"
+                 min="1"
+                 step="1"
+                 inputmode="numeric"
+                 class="apple-input profile-input"
+                 placeholder="Log weight first">
+          <span class="profile-inline-input-unit">g/day</span>
+        </div>
+      </div>
+    </div>
+
+    <p id="profile-protein-status" class="apple-caption apple-caption-tight"></p>
+  </div>
+
   <div id="profile-activity-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
     <div class="apple-modal apple-modal-profile-activity" role="dialog" aria-modal="true" aria-labelledby="profile-activity-title">
       <div class="apple-modal-header">
