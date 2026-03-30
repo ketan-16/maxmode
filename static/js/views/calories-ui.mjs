@@ -28,6 +28,7 @@ import { escapeHtml, formatTime, getHeightDisplay } from "../modules/data-utils.
 import {
   buildCalorieTrackerSummary,
   clampPortion,
+  getMacroTargets,
   getLocalDayKey
 } from "../modules/meal-utils.mjs";
 import { syncRangeInputVisual } from "../modules/slider-ui.mjs";
@@ -153,15 +154,6 @@ function createManualPhotoId() {
 
 function formatMacroProgress(current, target) {
   return `${formatCalories(current)}/${formatCalories(target)}g`;
-}
-
-function getMacroTargets(goalCalories) {
-  const safeGoal = Math.max(0, Math.round(goalCalories || 0));
-  return {
-    protein: Math.round((safeGoal * 0.3) / 4),
-    carbs: Math.round((safeGoal * 0.4) / 4),
-    fat: Math.round((safeGoal * 0.3) / 9)
-  };
 }
 
 function setRadialProgress(layerName, ratio) {

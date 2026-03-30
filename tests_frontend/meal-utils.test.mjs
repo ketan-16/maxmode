@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildWeeklyCalorieIntakeSeries,
   buildCalorieTrackerSummary,
   getFrequentFoods,
+  getMacroTargets,
   getRecentFoods,
   normalizeMeals,
   scaleMealNutrition
@@ -310,4 +312,88 @@ test("buildCalorieTrackerSummary tracks overflow progress around the calorie goa
       `${scenario.name}: overflowProgressRatioCapped`
     );
   }
+});
+
+test("getMacroTargets derives 30/40/30 targets from goal calories", () => {
+  assert.deepEqual(getMacroTargets(2500), {
+    protein: 188,
+    carbs: 250,
+    fat: 83
+  });
+  assert.deepEqual(getMacroTargets(0), {
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  });
+});
+
+test("buildWeeklyCalorieIntakeSeries returns an empty 7-day window when no meals exist", () => {
+  const referenceDate = new Date("2026-03-27T18:30:00");
+  const series = buildWeeklyCalorieIntakeSeries(createTrackerState(), referenceDate);
+
+  assert.equal(series.length, 7);
+  assert.equal(series.filter((day) => day.hasMeals).length, 0);
+  assert.equal(series[0].dayKey, "2026-03-21");
+  assert.equal(series[6].dayKey, "2026-03-27");
+  assert.equal(series[6].isToday, true);
+  assert.ok(series.every((day) => day.consumedCalories === 0));
+});
+
+test("buildWeeklyCalorieIntakeSeries buckets sparse meals into the matching day keys", () => {
+  const referenceDate = new Date("2026-03-27T18:30:00");
+  const state = createTrackerState([
+    createMeal({
+      id: "today",
+      calories: 540,
+      loggedAt: "2026-03-27T08:10:00"
+    }),
+    createMeal({
+      id: "earlier",
+      calories: 810,
+      loggedAt: "2026-03-24T19:05:00"
+    })
+  ]);
+  const series = buildWeeklyCalorieIntakeSeries(state, referenceDate);
+
+  assert.equal(series.filter((day) => day.hasMeals).length, 2);
+  assert.equal(series.find((day) => day.dayKey === "2026-03-27").consumedCalories, 540);
+  assert.equal(series.find((day) => day.dayKey === "2026-03-24").consumedCalories, 810);
+});
+
+test("buildWeeklyCalorieIntakeSeries marks under-goal days without overflow", () => {
+  const referenceDate = new Date("2026-03-27T18:30:00");
+  const goalCalories = buildCalorieTrackerSummary(createTrackerState(), referenceDate).goalCalories;
+  const state = createTrackerState([
+    createMeal({
+      id: "under-goal",
+      calories: goalCalories - 180,
+      loggedAt: "2026-03-26T12:00:00"
+    })
+  ]);
+  const series = buildWeeklyCalorieIntakeSeries(state, referenceDate);
+  const day = series.find((item) => item.dayKey === "2026-03-26");
+
+  assert.equal(day.hasMeals, true);
+  assert.equal(day.isOver, false);
+  assert.equal(day.consumedCalories, goalCalories - 180);
+  assertRatioClose(day.ratio, (goalCalories - 180) / goalCalories, "under-goal weekly ratio");
+});
+
+test("buildWeeklyCalorieIntakeSeries marks over-goal days when intake exceeds the target", () => {
+  const referenceDate = new Date("2026-03-27T18:30:00");
+  const goalCalories = buildCalorieTrackerSummary(createTrackerState(), referenceDate).goalCalories;
+  const state = createTrackerState([
+    createMeal({
+      id: "over-goal",
+      calories: goalCalories + 240,
+      loggedAt: "2026-03-25T19:45:00"
+    })
+  ]);
+  const series = buildWeeklyCalorieIntakeSeries(state, referenceDate);
+  const day = series.find((item) => item.dayKey === "2026-03-25");
+
+  assert.equal(day.hasMeals, true);
+  assert.equal(day.isOver, true);
+  assert.equal(day.consumedCalories, goalCalories + 240);
+  assertRatioClose(day.ratio, (goalCalories + 240) / goalCalories, "over-goal weekly ratio");
 });

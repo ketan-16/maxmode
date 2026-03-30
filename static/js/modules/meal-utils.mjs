@@ -209,6 +209,93 @@ export function getMealsForDay(meals, referenceDate = new Date()) {
   return sortMealsNewestFirst(filtered);
 }
 
+export function getMacroTargets(goalCalories) {
+  const safeGoal = Math.max(0, Math.round(goalCalories || 0));
+  return {
+    protein: Math.round((safeGoal * 0.3) / 4),
+    carbs: Math.round((safeGoal * 0.4) / 4),
+    fat: Math.round((safeGoal * 0.3) / 9)
+  };
+}
+
+function startOfDay(value) {
+  const date = (value instanceof Date) ? new Date(value.getTime()) : new Date(value);
+  if (!Number.isFinite(date.getTime())) return new Date(NaN);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function shiftDateByDays(value, days) {
+  const date = (value instanceof Date) ? new Date(value.getTime()) : new Date(value);
+  if (!Number.isFinite(date.getTime())) return new Date(NaN);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function formatWeekdayLetter(value) {
+  const date = (value instanceof Date) ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+
+  return date
+    .toLocaleDateString(undefined, { weekday: "short" })
+    .slice(0, 1)
+    .toUpperCase();
+}
+
+export function buildWeeklyCalorieIntakeSeries(state, referenceDate = new Date()) {
+  const sourceMeals = Array.isArray(state && state.meals) ? state.meals : [];
+  const allMeals = sortMealsNewestFirst(sourceMeals);
+  const goalSummary = resolveCalorieGoalFromState(state);
+  const goalCalories = goalSummary.goalCalories;
+  const todayStart = startOfDay(referenceDate);
+
+  if (!Number.isFinite(todayStart.getTime())) {
+    return [];
+  }
+
+  const days = [];
+  const daysByKey = new Map();
+
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const date = shiftDateByDays(todayStart, -offset);
+    const dayKey = getLocalDayKey(date);
+    const item = {
+      dayKey,
+      label: formatWeekdayLetter(date),
+      fullLabel: date.toLocaleDateString(undefined, { weekday: "long" }),
+      consumedCalories: 0,
+      goalCalories,
+      ratio: 0,
+      hasMeals: false,
+      isOver: false,
+      isToday: offset === 0
+    };
+
+    days.push(item);
+    daysByKey.set(dayKey, item);
+  }
+
+  for (let i = 0; i < allMeals.length; i += 1) {
+    const meal = allMeals[i];
+    if (!meal || typeof meal !== "object") continue;
+
+    const dayKey = getLocalDayKey(meal.loggedAt);
+    const day = daysByKey.get(dayKey);
+    if (!day) continue;
+
+    day.consumedCalories += normalizeMacroValue(meal.calories);
+    day.hasMeals = true;
+  }
+
+  for (let i = 0; i < days.length; i += 1) {
+    const day = days[i];
+    day.ratio = goalCalories > 0 ? (day.consumedCalories / goalCalories) : 0;
+    day.isOver = goalCalories > 0 && day.consumedCalories > goalCalories;
+  }
+
+  return days;
+}
+
 export function getRecentFoods(meals, limit = RECENT_FOOD_LIMIT) {
   const source = sortMealsNewestFirst(Array.isArray(meals) ? meals : []);
   const seen = new Set();

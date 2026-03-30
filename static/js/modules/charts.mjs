@@ -87,18 +87,21 @@ function buildSmoothLinePath(points) {
 
 function buildWeightChartModel(points, options) {
   const interactive = !!(options && options.interactive);
+  const compact = !!(options && options.compact);
   const widthInput = options && options.width ? Math.floor(options.width) : 0;
   const width = Math.max(300, widthInput || 640);
-  const height = interactive ? 248 : 220;
+  const height = interactive ? 248 : (compact ? 128 : 220);
 
   const padding = interactive
     ? { top: 54, right: 18, bottom: 30, left: 48 }
-    : { top: 24, right: 18, bottom: 30, left: 48 };
+    : (compact
+      ? { top: 10, right: 10, bottom: 24, left: 34 }
+      : { top: 24, right: 18, bottom: 30, left: 48 });
 
   const plotLeft = padding.left;
   const plotTop = padding.top;
-  const plotWidth = Math.max(120, width - padding.left - padding.right);
-  const plotHeight = Math.max(90, height - padding.top - padding.bottom);
+  const plotWidth = Math.max(compact ? 100 : 120, width - padding.left - padding.right);
+  const plotHeight = Math.max(compact ? 72 : 90, height - padding.top - padding.bottom);
   const plotRight = plotLeft + plotWidth;
   const plotBottom = plotTop + plotHeight;
 
@@ -155,9 +158,10 @@ function buildWeightChartModel(points, options) {
     areaPath = `${linePath} L ${projected[projected.length - 1].x.toFixed(2)} ${plotBottom.toFixed(2)} L ${projected[0].x.toFixed(2)} ${plotBottom.toFixed(2)} Z`;
   }
 
+  const yTickSteps = compact ? 2 : 4;
   const yTicks = [];
-  for (let yIndex = 0; yIndex <= 4; yIndex += 1) {
-    const yRatio = yIndex / 4;
+  for (let yIndex = 0; yIndex <= yTickSteps; yIndex += 1) {
+    const yRatio = yTickSteps > 0 ? (yIndex / yTickSteps) : 0;
     yTicks.push({
       y: plotTop + (yRatio * plotHeight),
       value: domainMax - (yRatio * domainSpan)
@@ -166,7 +170,9 @@ function buildWeightChartModel(points, options) {
 
   const xTicks = [];
   const includeYear = new Date(minTimestamp).getFullYear() !== new Date(maxTimestamp).getFullYear();
-  const tickIndices = [0, Math.floor((projected.length - 1) / 2), projected.length - 1];
+  const tickIndices = compact
+    ? [0, projected.length - 1]
+    : [0, Math.floor((projected.length - 1) / 2), projected.length - 1];
   const seen = {};
 
   for (let t = 0; t < tickIndices.length; t += 1) {
@@ -198,7 +204,8 @@ function buildWeightChartModel(points, options) {
     yTicks,
     xTicks,
     gradientId,
-    interactive
+    interactive,
+    compact
   };
 }
 
@@ -225,7 +232,7 @@ function buildWeightChartSvg(model) {
   }
   parts.push("</g>");
 
-  if (model.areaPath) {
+  if (model.areaPath && !model.compact) {
     parts.push(`<path class="weight-chart-path-area" d="${model.areaPath}" fill="url(#${model.gradientId})"></path>`);
   }
 
@@ -285,6 +292,7 @@ export function renderDashboardWeightChart(container, series) {
   const model = buildWeightChartModel(series, {
     width: chartWidth,
     interactive: false,
+    compact: true,
     chartId: "dashboard"
   });
 

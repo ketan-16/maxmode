@@ -3042,6 +3042,716 @@ html.no-view-transition .htmx-settling {
   border-bottom: 0;
 }
 
+.dashboard-page {
+  padding-top: 0.12rem;
+}
+
+.dashboard-shell {
+  width: 100%;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row;
+  gap: 0.95rem;
+  align-items: start;
+}
+
+.dashboard-card {
+  position: relative;
+  display: block;
+  min-width: 0;
+  padding: 1.15rem 1.05rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: calc(var(--apple-radius-card) + 2px);
+  background: var(--apple-surface);
+  overflow: hidden;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.dashboard-card:hover {
+  background: color-mix(in srgb, var(--apple-surface) 88%, var(--apple-fill-hover));
+}
+
+.dashboard-card:active {
+  background: color-mix(in srgb, var(--apple-surface) 84%, var(--apple-fill));
+}
+
+.dashboard-card:focus-visible {
+  outline: 3px solid var(--apple-focus-ring);
+  outline-offset: 2px;
+}
+
+.dashboard-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.dashboard-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
+.dashboard-card-icon {
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.95rem;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--apple-fill) 80%, var(--apple-surface));
+  color: var(--apple-label);
+}
+
+.dashboard-card-icon svg {
+  width: 1.14rem;
+  height: 1.14rem;
+  fill: none;
+}
+
+.dashboard-card-icon-goal {
+  background: color-mix(in srgb, var(--chart-line-strong) 14%, var(--apple-surface-elevated));
+  color: var(--chart-line-strong);
+}
+
+.dashboard-card-icon-macro {
+  background: color-mix(in srgb, #b86a00 14%, var(--apple-surface-elevated));
+  color: #9d5a00;
+}
+
+.dashboard-card-icon-weight {
+  background: color-mix(in srgb, var(--apple-label) 10%, var(--apple-surface-elevated));
+  color: color-mix(in srgb, var(--apple-label) 76%, var(--chart-line-strong));
+}
+
+.dashboard-card-icon-weekly {
+  background: color-mix(in srgb, var(--chart-line-strong) 12%, var(--apple-surface-elevated));
+  color: color-mix(in srgb, var(--chart-line-strong) 90%, white);
+}
+
+.dashboard-card-icon-streak {
+  background: color-mix(in srgb, #cf7a1f 12%, var(--apple-surface-elevated));
+  color: #b46816;
+}
+
+.dashboard-card-icon-meals {
+  background: color-mix(in srgb, #d57940 14%, var(--apple-surface-elevated));
+  color: #c26a36;
+}
+
+.dashboard-card-kicker {
+  margin: 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 680;
+}
+
+.dashboard-card-title {
+  margin: 0.16rem 0 0;
+  color: var(--apple-label);
+  font-size: 1.02rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 720;
+}
+
+.dashboard-card-chip,
+.dashboard-card-action-label,
+.dashboard-card-inline-note {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.dashboard-card-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  min-height: 1.9rem;
+  padding: 0.34rem 0.64rem;
+  border-radius: var(--apple-radius-pill);
+  background: color-mix(in srgb, var(--apple-fill) 70%, var(--apple-surface));
+  color: var(--apple-secondary-label);
+  font-size: 0.69rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.dashboard-card-chip-icon {
+  width: 1.9rem;
+  padding-inline: 0;
+}
+
+.dashboard-card-chip-icon svg {
+  width: 0.96rem;
+  height: 0.96rem;
+}
+
+.dashboard-card-action-label {
+  color: var(--chart-line-strong);
+  font-size: 0.85rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+.dashboard-card-inline-note {
+  max-width: 17ch;
+  color: var(--apple-secondary-label);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.dashboard-card-footnote {
+  margin: 0.82rem 0 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-card-goal {
+  min-height: 19.8rem;
+}
+
+.dashboard-goal-hero {
+  padding-top: 0.95rem;
+  min-height: 7.7rem;
+}
+
+.dashboard-goal-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 14vw, 4rem);
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+  font-weight: 760;
+  color: var(--chart-line-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-card-goal.is-over .dashboard-goal-value {
+  color: var(--apple-destructive);
+}
+
+.dashboard-goal-label {
+  margin: 0.46rem 0 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.88rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  font-weight: 650;
+}
+
+.dashboard-goal-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.64rem;
+}
+
+.dashboard-goal-metric {
+  padding: 0.78rem 0.82rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--apple-surface-elevated) 74%, var(--apple-surface));
+}
+
+.dashboard-goal-metric-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.42rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-weight: 730;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-goal-metric-label {
+  margin: 0.28rem 0 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.79rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-progress-track {
+  position: relative;
+  height: 0.72rem;
+  margin-top: 1rem;
+  border-radius: var(--apple-radius-pill);
+  background: color-mix(in srgb, var(--apple-fill) 72%, var(--apple-surface));
+  overflow: hidden;
+}
+
+.dashboard-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--chart-line-strong);
+  transition: width var(--motion-duration-modal) var(--motion-ease-emphasized);
+}
+
+.dashboard-card-goal.is-over .dashboard-progress-fill {
+  background: var(--apple-destructive);
+}
+
+.dashboard-card-macro {
+  display: grid;
+  align-content: start;
+  gap: 0.62rem;
+  min-height: 17.2rem;
+}
+
+.dashboard-macro-visual {
+  display: grid;
+  place-items: center;
+  padding-top: 0;
+}
+
+.dashboard-macro-ring-shell {
+  position: relative;
+  width: min(9.65rem, 100%);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.dashboard-macro-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dashboard-macro-ring-track,
+.dashboard-macro-ring-progress {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.dashboard-macro-ring-track,
+.dashboard-macro-ring-progress {
+  stroke-width: 8;
+}
+
+.dashboard-macro-ring-track-protein {
+  stroke: color-mix(in srgb, var(--chart-line-strong) 16%, transparent);
+}
+
+.dashboard-macro-ring-track-carbs {
+  stroke: color-mix(in srgb, #b86a00 16%, transparent);
+}
+
+.dashboard-macro-ring-track-fat {
+  stroke: color-mix(in srgb, #d75463 16%, transparent);
+}
+
+.dashboard-macro-ring-progress-protein {
+  stroke: var(--chart-line-strong);
+}
+
+.dashboard-macro-ring-progress-carbs {
+  stroke: #b86a00;
+}
+
+.dashboard-macro-ring-progress-fat {
+  stroke: #d75463;
+}
+
+.dashboard-macro-ring-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.08rem;
+  padding: 1rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.dashboard-macro-center-label {
+  margin: 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.58rem;
+  line-height: 1.1;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 680;
+}
+
+.dashboard-macro-center-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.04rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-weight: 740;
+}
+
+.dashboard-macro-pill-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.38rem;
+  margin-top: 0.1rem;
+}
+
+.dashboard-macro-pill {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.16rem;
+  min-height: 4.2rem;
+  padding: 0.52rem 0.36rem;
+  border-radius: 1rem;
+  text-align: center;
+}
+
+.dashboard-macro-pill-protein {
+  background: color-mix(in srgb, var(--chart-line-strong) 11%, var(--apple-surface-elevated));
+}
+
+.dashboard-macro-pill-carbs {
+  background: color-mix(in srgb, #b86a00 10%, var(--apple-surface-elevated));
+}
+
+.dashboard-macro-pill-fat {
+  background: color-mix(in srgb, #d75463 10%, var(--apple-surface-elevated));
+}
+
+.dashboard-macro-pill-label {
+  margin: 0;
+  font-size: 0.64rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 720;
+}
+
+.dashboard-macro-pill-protein .dashboard-macro-pill-label {
+  color: var(--chart-line-strong);
+}
+
+.dashboard-macro-pill-carbs .dashboard-macro-pill-label {
+  color: #9d5a00;
+}
+
+.dashboard-macro-pill-fat .dashboard-macro-pill-label {
+  color: #c14958;
+}
+
+.dashboard-macro-pill-value {
+  margin: 0;
+  color: var(--apple-label);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-weight: 730;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-macro-pill-meta {
+  margin: 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.58rem;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-card-weight {
+  min-height: 16rem;
+}
+
+.dashboard-weight-delta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.9rem;
+  padding: 0.34rem 0.64rem;
+  border-radius: var(--apple-radius-pill);
+  background: color-mix(in srgb, var(--apple-fill) 74%, var(--apple-surface));
+  color: var(--apple-secondary-label);
+  white-space: nowrap;
+  word-break: keep-all;
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-weight-delta.is-compact {
+  font-size: 0.68rem;
+  padding-inline: 0.52rem;
+}
+
+.dashboard-weight-delta.is-up {
+  background: color-mix(in srgb, var(--chart-line-strong) 12%, var(--apple-surface));
+  color: var(--chart-line-strong);
+}
+
+.dashboard-weight-delta.is-down {
+  background: color-mix(in srgb, var(--apple-destructive) 12%, var(--apple-surface));
+  color: var(--apple-destructive);
+}
+
+.dashboard-weight-hero {
+  padding-top: 0.92rem;
+}
+
+.dashboard-weight-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 10vw, 2.75rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+  font-weight: 755;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-weight-trend {
+  min-height: 7.2rem;
+  margin-top: 1rem;
+}
+
+.dashboard-weight-trend .weight-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.dashboard-weight-trend .weight-chart-axis-label {
+  font-size: 9px;
+}
+
+.dashboard-weight-trend .weight-chart-point {
+  opacity: 0.56;
+}
+
+.dashboard-weight-trend .weight-chart-empty {
+  min-height: 7.2rem;
+  padding: 0.5rem 0.4rem;
+  font-size: 0.82rem;
+}
+
+.dashboard-card-weekly {
+  min-height: 16.8rem;
+}
+
+.dashboard-card-streak {
+  min-height: 16.8rem;
+}
+
+.dashboard-weekly-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.52rem;
+  align-items: end;
+  min-height: 11.4rem;
+  padding-top: 0.86rem;
+}
+
+.dashboard-weekly-day {
+  display: grid;
+  justify-items: center;
+  gap: 0.54rem;
+}
+
+.dashboard-weekly-bar-shell {
+  position: relative;
+  width: 100%;
+  min-height: 8.8rem;
+  border-radius: var(--apple-radius-pill);
+  background: color-mix(in srgb, var(--apple-fill) 66%, var(--apple-surface));
+  overflow: hidden;
+}
+
+.dashboard-weekly-bar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--apple-secondary-label) 16%, var(--apple-surface));
+  opacity: 0.82;
+}
+
+.dashboard-weekly-bar-fill.has-value {
+  background: color-mix(in srgb, var(--chart-line-strong) 78%, var(--apple-surface));
+  opacity: 1;
+}
+
+.dashboard-weekly-bar-fill.is-over {
+  background: color-mix(in srgb, var(--apple-destructive) 82%, var(--apple-surface));
+}
+
+.dashboard-weekly-bar-fill.is-today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chart-line-strong) 42%, white);
+}
+
+.dashboard-weekly-label {
+  color: var(--apple-secondary-label);
+  font-size: 0.82rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 650;
+}
+
+.dashboard-weekly-label.is-today {
+  color: var(--apple-label);
+}
+
+.dashboard-streak-hero {
+  padding-top: 1.05rem;
+}
+
+.dashboard-streak-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.7rem, 12vw, 3.3rem);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+  font-weight: 755;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-streak-label {
+  margin: 0.34rem 0 0;
+  color: var(--apple-secondary-label);
+  font-size: 0.92rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-weight: 650;
+}
+
+.dashboard-card-meals {
+  min-height: 18rem;
+}
+
+.dashboard-meals-list {
+  display: grid;
+  gap: 0.78rem;
+  margin-top: 0.92rem;
+}
+
+.dashboard-meals-empty {
+  padding: 0.82rem 0.1rem 0.2rem;
+  color: var(--apple-secondary-label);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-meal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.78rem;
+  min-width: 0;
+}
+
+.dashboard-meal-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.95rem;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--apple-fill) 74%, var(--apple-surface));
+  color: var(--apple-label);
+}
+
+.dashboard-meal-icon svg {
+  width: 1.08rem;
+  height: 1.08rem;
+  fill: none;
+}
+
+.dashboard-meal-icon-breakfast {
+  background: color-mix(in srgb, #f3b36a 16%, var(--apple-surface));
+  color: #bb7230;
+}
+
+.dashboard-meal-icon-lunch {
+  background: color-mix(in srgb, var(--chart-line-strong) 12%, var(--apple-surface));
+  color: var(--chart-line-strong);
+}
+
+.dashboard-meal-icon-dinner {
+  background: color-mix(in srgb, #d97a68 14%, var(--apple-surface));
+  color: #c56453;
+}
+
+.dashboard-meal-icon-snack {
+  background: color-mix(in srgb, var(--apple-fill-active) 82%, var(--apple-surface));
+  color: var(--apple-secondary-label);
+}
+
+.dashboard-meal-copy {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.dashboard-meal-name {
+  display: block;
+  min-width: 0;
+  color: var(--apple-label);
+  font-size: 0.96rem;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  font-weight: 680;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-meal-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-width: 0;
+  flex-wrap: wrap;
+  color: var(--apple-secondary-label);
+  font-size: 0.82rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-meal-meta-divider {
+  width: 0.26rem;
+  height: 0.26rem;
+  border-radius: 50%;
+  background: var(--apple-tertiary-label);
+  flex-shrink: 0;
+}
+
+.dashboard-meal-calories {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--apple-label);
+  font-family: var(--font-display);
+  font-size: 1.04rem;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 730;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .weight-chart-card {
   margin-top: 0;
 }
@@ -3080,7 +3790,6 @@ html.no-view-transition .htmx-settling {
 
 .weight-chart-plot {
   width: 100%;
-  min-height: inherit;
 }
 
 .weight-chart-empty {
@@ -4937,6 +5646,76 @@ html.no-view-transition .htmx-settling {
     padding: 0.24rem 0.45rem;
     font-size: 0.64rem;
   }
+
+  .dashboard-card {
+    padding: 1rem 0.96rem;
+  }
+
+  .dashboard-card-header {
+    gap: 0.68rem;
+  }
+
+  .dashboard-card-inline-note {
+    max-width: 13ch;
+    font-size: 0.74rem;
+  }
+
+  .dashboard-card-goal,
+  .dashboard-card-macro,
+  .dashboard-card-weight,
+  .dashboard-card-streak,
+  .dashboard-card-weekly,
+  .dashboard-card-meals {
+    min-height: auto;
+  }
+
+  .dashboard-goal-value {
+    font-size: clamp(2.55rem, 13.5vw, 3.6rem);
+  }
+
+  .dashboard-goal-metric {
+    padding: 0.7rem 0.72rem;
+  }
+
+  .dashboard-macro-ring-shell {
+    width: min(8.95rem, 100%);
+  }
+
+  .dashboard-macro-pill-row {
+    gap: 0.34rem;
+  }
+
+  .dashboard-macro-pill {
+    min-height: 4rem;
+    padding: 0.48rem 0.3rem;
+  }
+
+  .dashboard-macro-pill-value {
+    font-size: 0.84rem;
+  }
+
+  .dashboard-weight-trend-svg,
+  .dashboard-weekly-bar-shell {
+    border-radius: 0.9rem;
+  }
+
+  .dashboard-weekly-bars {
+    gap: 0.42rem;
+    min-height: 10rem;
+  }
+
+  .dashboard-meal-row {
+    gap: 0.68rem;
+  }
+
+  .dashboard-meal-icon {
+    width: 2.45rem;
+    height: 2.45rem;
+  }
+
+  .dashboard-meal-calories {
+    font-size: 0.96rem;
+  }
 }
 
 @media (min-width: 641px) and (max-width: 1023px) {
@@ -4958,6 +5737,24 @@ html.no-view-transition .htmx-settling {
 
   .dashboard-weight-card .weight-chart-shell {
     min-height: 226px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .dashboard-card {
+    padding: 1.18rem 1.12rem;
+  }
+
+  .dashboard-card-inline-note {
+    max-width: 18ch;
+  }
+
+  .dashboard-card-goal,
+  .dashboard-card-meals {
+    grid-column: 1 / -1;
   }
 }
 
@@ -5095,6 +5892,106 @@ html.no-view-transition .htmx-settling {
     border-radius: calc(var(--apple-radius-card) - 6px);
     padding: 0.78rem 0.82rem;
     gap: 0.65rem;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.05rem;
+    align-items: stretch;
+  }
+
+  .dashboard-card {
+    padding: 1.28rem 1.2rem;
+  }
+
+  .dashboard-card-goal {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-card-meals {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-macro-visual {
+    padding-top: 0;
+  }
+
+  .dashboard-macro-ring-shell {
+    width: min(8.8rem, 100%);
+  }
+
+  .dashboard-macro-center-label {
+    display: none;
+  }
+
+  .dashboard-macro-center-value {
+    font-size: 0.98rem;
+  }
+
+  .dashboard-macro-pill-row {
+    gap: 0.32rem;
+    margin-top: 0;
+  }
+
+  .dashboard-macro-pill {
+    min-height: 3.9rem;
+    padding: 0.46rem 0.28rem;
+  }
+
+  .dashboard-macro-pill-label {
+    font-size: 0.6rem;
+  }
+
+  .dashboard-macro-pill-value {
+    font-size: 0.82rem;
+  }
+
+  .dashboard-macro-pill-meta {
+    font-size: 0.54rem;
+    line-height: 1.08;
+  }
+
+  .dashboard-card-weekly {
+    min-height: 17.8rem;
+  }
+
+  .dashboard-card-streak {
+    min-height: 17.8rem;
+  }
+
+  .dashboard-card-meals {
+    min-height: 19rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .dashboard-macro-ring-shell {
+    width: min(8.65rem, 100%);
+  }
+
+  .dashboard-macro-center-label {
+    display: none;
+  }
+
+  .dashboard-macro-center-value {
+    font-size: 0.96rem;
+  }
+
+  .dashboard-macro-pill {
+    min-height: 3.86rem;
+    padding-inline: 0.26rem;
+  }
+
+  .dashboard-macro-pill-label {
+    font-size: 0.58rem;
+  }
+
+  .dashboard-macro-pill-value {
+    font-size: 0.8rem;
+  }
+
+  .dashboard-macro-pill-meta {
+    font-size: 0.52rem;
   }
 }
 

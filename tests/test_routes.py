@@ -55,6 +55,17 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.template.name, "partials/dashboard_content.html")
         self.assertEqual(response.headers.get("vary"), "HX-Request")
 
+    async def test_dashboard_markup_includes_root_marker(self):
+        response = await main.dashboard(make_request("/", hx=True))
+        body = response.body.decode("utf-8")
+        self.assertIn('id="dashboard-page-root"', body)
+        self.assertIn('id="dashboard-goal-card"', body)
+        self.assertIn('id="dashboard-macro-card"', body)
+        self.assertIn('id="dashboard-weight-summary-card"', body)
+        self.assertIn('id="dashboard-weekly-card"', body)
+        self.assertIn('id="dashboard-streak-card"', body)
+        self.assertIn('id="dashboard-meals-card"', body)
+
     async def test_weights_partial_for_hx_request(self):
         response = await main.weights(make_request("/weights", hx=True))
         self.assertEqual(response.template.name, "partials/weights_content.html")

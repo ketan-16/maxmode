@@ -251,7 +251,7 @@ function detectActiveView() {
   if (document.getElementById("weight-desktop-groups") || document.getElementById("weight-mobile-groups")) {
     return "weights";
   }
-  if (document.getElementById("latest-weight-value")) {
+  if (document.getElementById("dashboard-page-root")) {
     return "dashboard";
   }
   if (document.getElementById("profile-name")) {
