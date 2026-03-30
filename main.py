@@ -81,6 +81,8 @@ async def offline(request: Request):
 async def analyze_calorie_entry(
     mode: str = Form(default="manual"),
     note: str = Form(default=""),
+    goal_objective: str = Form(default=""),
+    ai_calculation_mode: str = Form(default=""),
     image: UploadFile | None = File(default=None),
     images: list[UploadFile] | None = File(default=None),
 ):
@@ -101,6 +103,8 @@ async def analyze_calorie_entry(
             note=note,
             image_payloads=image_payloads,
             mode=mode,
+            goal_objective=goal_objective,
+            ai_calculation_mode=ai_calculation_mode,
         )
     except MealAnalysisError as exc:
         message = str(exc).strip() or "Unable to analyze this meal right now."

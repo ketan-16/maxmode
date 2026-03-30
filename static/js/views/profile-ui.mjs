@@ -47,10 +47,15 @@ function normalizePreferenceWeightUnit(unit) {
   return (unit === "lb") ? "lb" : "kg";
 }
 
+function normalizePreferenceAiCalculationMode(mode) {
+  return (mode === "aggressive") ? "aggressive" : "balanced";
+}
+
 function normalizeProfileSegmentValue(inputId, value) {
   if (inputId === "profile-gender-input") return normalizeProfileGender(value);
   if (inputId === "profile-pref-height-unit") return normalizePreferenceHeightUnit(value);
   if (inputId === "profile-pref-weight-unit") return normalizePreferenceWeightUnit(value);
+  if (inputId === "profile-ai-calculation-mode") return normalizePreferenceAiCalculationMode(value);
   return null;
 }
 
@@ -398,11 +403,16 @@ function renderActivityText(activityLevel) {
 function renderPreferences(preferences) {
   const heightInput = document.getElementById("profile-pref-height-unit");
   const weightInput = document.getElementById("profile-pref-weight-unit");
+  const aiCalculationModeInput = document.getElementById("profile-ai-calculation-mode");
 
   if (heightInput) heightInput.value = normalizePreferenceHeightUnit(preferences.heightUnit);
   if (weightInput) weightInput.value = normalizePreferenceWeightUnit(preferences.weightUnit);
+  if (aiCalculationModeInput) {
+    aiCalculationModeInput.value = normalizePreferenceAiCalculationMode(preferences.aiCalculationMode);
+  }
   syncProfileSegmentedControl("profile-pref-height-unit");
   syncProfileSegmentedControl("profile-pref-weight-unit");
+  syncProfileSegmentedControl("profile-ai-calculation-mode");
 }
 
 function renderActivityOptions(selectedLevel) {
@@ -579,6 +589,11 @@ function bindProfileEvents() {
 
       if (inputId === "profile-pref-weight-unit") {
         persistPreferences({ weightUnit: normalizePreferenceWeightUnit(nextValue) });
+        return;
+      }
+
+      if (inputId === "profile-ai-calculation-mode") {
+        persistPreferences({ aiCalculationMode: normalizePreferenceAiCalculationMode(nextValue) });
       }
       return;
     }
@@ -691,6 +706,7 @@ export function render(state) {
   syncProfileSegmentedControl("profile-gender-input");
   syncProfileSegmentedControl("profile-pref-height-unit");
   syncProfileSegmentedControl("profile-pref-weight-unit");
+  syncProfileSegmentedControl("profile-ai-calculation-mode");
   bindProfileEvents();
 
   if (!isActivityModalOpen()) {

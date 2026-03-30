@@ -88,6 +88,7 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.template.name, "partials/profile_content.html")
         self.assertEqual(response.headers.get("vary"), "HX-Request")
         body = response.body.decode("utf-8")
+        self.assertIn('id="profile-ai-calculation-mode"', body)
         self.assertIn('id="profile-protein-multiplier-input"', body)
         self.assertIn('id="profile-protein-target-input"', body)
 
@@ -119,11 +120,24 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
             "confidence": "high",
         }
 
-        response = await main.analyze_calorie_entry(mode="manual", note="chicken rice bowl", image=None)
+        response = await main.analyze_calorie_entry(
+            mode="manual",
+            note="chicken rice bowl",
+            goal_objective="lose",
+            ai_calculation_mode="aggressive",
+            image=None,
+        )
 
         self.assertEqual(response.meal.name, "Chicken bowl")
         self.assertEqual(response.meal.calories, 620)
         self.assertEqual(response.meal.confidence, "high")
+        mock_analyze.assert_called_once_with(
+            note="chicken rice bowl",
+            image_payloads=[],
+            mode="manual",
+            goal_objective="lose",
+            ai_calculation_mode="aggressive",
+        )
 
     @patch("main.analyze_logged_meal")
     async def test_calorie_analysis_endpoint_maps_input_errors_to_400(self, mock_analyze):

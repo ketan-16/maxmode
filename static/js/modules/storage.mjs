@@ -24,7 +24,8 @@ const KEYS = {
 const DEFAULT_PREFERENCES = Object.freeze({
   heightUnit: "cm",
   weightUnit: "kg",
-  proteinMultiplierGPerKg: getMacroGoalDefaults("maintain").proteinMultiplierGPerKg
+  proteinMultiplierGPerKg: getMacroGoalDefaults("maintain").proteinMultiplierGPerKg,
+  aiCalculationMode: "balanced"
 });
 
 const DEFAULT_CALORIE_TRACKER_META = Object.freeze({
@@ -132,7 +133,10 @@ function normalizePreferences(rawPreferences, goalObjective = null) {
   return {
     heightUnit: source.heightUnit === "ft-in" ? "ft-in" : DEFAULT_PREFERENCES.heightUnit,
     weightUnit: source.weightUnit === "lb" ? "lb" : DEFAULT_PREFERENCES.weightUnit,
-    proteinMultiplierGPerKg: normalizeProteinMultiplierGPerKg(source.proteinMultiplierGPerKg, normalizedObjective)
+    proteinMultiplierGPerKg: normalizeProteinMultiplierGPerKg(source.proteinMultiplierGPerKg, normalizedObjective),
+    aiCalculationMode: source.aiCalculationMode === "aggressive"
+      ? "aggressive"
+      : DEFAULT_PREFERENCES.aiCalculationMode
   };
 }
 

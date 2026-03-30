@@ -168,6 +168,30 @@
 
     <div class="profile-advanced-grid">
       <div>
+        <p id="profile-ai-calculation-mode-label" class="apple-field-label">AI Calculation Mode</p>
+        <input type="hidden" id="profile-ai-calculation-mode" value="balanced">
+        <div class="apple-segmented profile-segmented"
+             role="radiogroup"
+             aria-labelledby="profile-ai-calculation-mode-label"
+             data-profile-segment="profile-ai-calculation-mode">
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="balanced">
+            Balanced
+          </button>
+          <button type="button"
+                  class="apple-segmented-btn profile-segmented-btn"
+                  role="radio"
+                  aria-checked="false"
+                  data-profile-segment-value="aggressive">
+            Aggressive
+          </button>
+        </div>
+      </div>
+
+      <div>
         <label for="profile-protein-multiplier-input" class="apple-field-label">Protein multiplier</label>
         <div class="profile-inline-input">
           <input type="number"

@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_MEAL_MODEL = "openai/gpt-5.4-nano"
+MEAL_AI_TEMPERATURE = 0.2
+VALID_GOAL_OBJECTIVES = {"lose", "maintain", "gain"}
+VALID_AI_CALCULATION_MODES = {"balanced", "aggressive"}
 
 SYSTEM_PROMPT = """
 You estimate a single logged meal for a lean calorie tracker.
@@ -131,6 +134,22 @@ def _macro_calories(protein: int, carbs: int, fat: int) -> int:
     return (protein * 4) + (carbs * 4) + (fat * 9)
 
 
+def _normalize_goal_objective(value: Any) -> str | None:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in VALID_GOAL_OBJECTIVES:
+            return normalized
+    return None
+
+
+def _normalize_ai_calculation_mode(value: Any) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in VALID_AI_CALCULATION_MODES:
+            return normalized
+    return "balanced"
+
+
 def _normalize_meal_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise MealAnalysisError("AI response was not an object.")
@@ -159,6 +178,43 @@ def _normalize_meal_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "carbs": carbs,
         "fat": fat,
         "confidence": _normalize_confidence(payload.get("confidence"))
+    }
+
+
+def _resolve_macro_adjustment_multiplier(goal_objective: Any, ai_calculation_mode: Any) -> float:
+    normalized_goal = _normalize_goal_objective(goal_objective)
+    normalized_mode = _normalize_ai_calculation_mode(ai_calculation_mode)
+
+    if normalized_mode != "aggressive":
+        return 1
+    if normalized_goal == "lose":
+        return 1.1
+    if normalized_goal == "gain":
+        return 0.9
+    return 1
+
+
+def _apply_ai_calculation_mode(
+    meal: dict[str, Any],
+    *,
+    goal_objective: Any = None,
+    ai_calculation_mode: Any = "balanced",
+) -> dict[str, Any]:
+    multiplier = _resolve_macro_adjustment_multiplier(goal_objective, ai_calculation_mode)
+    if multiplier == 1:
+        return dict(meal)
+
+    protein = max(0, int(round(meal.get("protein", 0) * multiplier)))
+    carbs = max(0, int(round(meal.get("carbs", 0) * multiplier)))
+    fat = max(0, int(round(meal.get("fat", 0) * multiplier)))
+    adjusted_calories = _macro_calories(protein, carbs, fat)
+
+    return {
+        **meal,
+        "protein": protein,
+        "carbs": carbs,
+        "fat": fat,
+        "calories": adjusted_calories if adjusted_calories > 0 else meal.get("calories", 0)
     }
 
 
@@ -201,6 +257,8 @@ def analyze_logged_meal(
     content_type: str | None = None,
     image_payloads: list[dict[str, str]] | None = None,
     mode: str = "manual",
+    goal_objective: str | None = None,
+    ai_calculation_mode: str | None = None,
 ) -> dict[str, Any]:
     note_copy = note.strip() if isinstance(note, str) else ""
     normalized_images = list(image_payloads or [])
@@ -231,9 +289,15 @@ def analyze_logged_meal(
                 "content": _build_user_content(note_copy, normalized_images, mode)
             }
         ],
+        temperature=MEAL_AI_TEMPERATURE,
         timeout=45,
     )
 
     raw_text = _extract_response_text(response)
     payload = _extract_json_payload(raw_text)
-    return _normalize_meal_payload(payload)
+    meal = _normalize_meal_payload(payload)
+    return _apply_ai_calculation_mode(
+        meal,
+        goal_objective=goal_objective,
+        ai_calculation_mode=ai_calculation_mode,
+    )

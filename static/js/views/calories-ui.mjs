@@ -1846,9 +1846,16 @@ function advanceGoalFlow() {
 }
 
 async function requestMealEstimate({ mode, note, files }) {
+  const state = latestState || loadState();
+  const goal = getCalorieGoal(state);
+  const preferences = getUserPreferences(state);
+  const goalObjective = CALORIE_GOAL_OBJECTIVES.includes(goal.objective) ? goal.objective : "";
+  const aiCalculationMode = preferences.aiCalculationMode === "aggressive" ? "aggressive" : "balanced";
   const formData = new FormData();
   formData.set("mode", mode || "manual");
   formData.set("note", note || "");
+  formData.set("goal_objective", goalObjective);
+  formData.set("ai_calculation_mode", aiCalculationMode);
   const imageFiles = Array.isArray(files) ? files : [];
   for (let i = 0; i < imageFiles.length; i += 1) {
     if (imageFiles[i]) {
