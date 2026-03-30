@@ -1,11 +1,13 @@
 import {
   addMeal,
   addWeight,
+  getCalorieGoal,
   deleteMeal,
   getCalorieTrackerMeta,
   getMealById,
   getUserPreferences,
   loadState,
+  setCalorieGoal,
   setCalorieProfile,
   setCalorieTrackerMeta,
   setUserPreferences,
@@ -13,8 +15,13 @@ import {
 } from "../modules/storage.mjs";
 import {
   ACTIVITY_OPTIONS,
+  CALORIE_GOAL_OBJECTIVES,
   cmToFeetInches,
   feetInchesToCm,
+  getCalorieGoalPreset,
+  getCalorieGoalPresets,
+  getCalorieMissingReasons,
+  resolveCalorieGoalFromState,
   weightToKg
 } from "../modules/calories-utils.mjs";
 import { escapeHtml, formatTime, getHeightDisplay } from "../modules/data-utils.mjs";
@@ -26,6 +33,7 @@ import {
 import { syncRangeInputVisual } from "../modules/slider-ui.mjs";
 
 const STEP_COUNT = 3;
+const GOAL_STEP_COUNT = 2;
 const SWIPE_THRESHOLD = 56;
 const OVERLAY_CLOSE_MS = 220;
 const TOAST_VISIBLE_MS = 2400;
@@ -46,8 +54,35 @@ const MEAL_ICONS = {
   CLONE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
   DELETE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="m19 6-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>'
 };
+const GOAL_OBJECTIVE_META = {
+  lose: {
+    title: "Lose weight",
+    badge: "Cutting",
+    description: "Run a calorie deficit below TDEE to reduce body fat while protecting recovery."
+  },
+  maintain: {
+    title: "Maintain",
+    badge: "Maintenance",
+    description: "Hold your current weight by matching calories to your daily energy needs."
+  },
+  gain: {
+    title: "Gain weight",
+    badge: "Bulking",
+    description: "Use a calorie surplus above TDEE to support muscle growth and performance."
+  }
+};
+const GOAL_MISSING_REASON_LABELS = {
+  age: "Add your age",
+  gender: "Choose your gender",
+  height: "Enter your height",
+  activityLevel: "Set your activity level",
+  weight: "Log at least one body weight"
+};
 
 let currentStep = 0;
+let goalCurrentStep = 0;
+let selectedGoalObjective = "";
+let selectedGoalPresetKey = "";
 let latestState = null;
 let closeTimers = new Map();
 let touchStartX = 0;
@@ -93,6 +128,12 @@ function formatCountLabel(count, singular, plural = null) {
 function formatCalories(value) {
   const normalized = Math.max(0, Math.round(value || 0));
   return normalized.toLocaleString();
+}
+
+function formatSignedCalories(value) {
+  const normalized = Math.round(value || 0);
+  if (!normalized) return "0";
+  return `${normalized > 0 ? "+" : "-"}${formatCalories(Math.abs(normalized))}`;
 }
 
 function truncateLabel(value, maxChars = RECENT_FOOD_NAME_LIMIT) {
@@ -321,6 +362,7 @@ function hasVisibleCalorieOverlay() {
     "calorie-macro-modal",
     "calorie-manual-modal",
     "calorie-preview-modal",
+    "calorie-goal-modal",
     "calorie-setup-modal"
   ];
 
@@ -547,7 +589,8 @@ function closeTrackerOverlays(exceptId = "") {
   const overlays = [
     "calorie-macro-modal",
     "calorie-manual-modal",
-    "calorie-preview-modal"
+    "calorie-preview-modal",
+    "calorie-goal-modal"
   ];
 
   for (let i = 0; i < overlays.length; i += 1) {
@@ -633,6 +676,12 @@ function setPreviewError(message) {
 
 function setSetupError(message) {
   const errorEl = document.getElementById("calorie-setup-error");
+  if (!errorEl) return;
+  errorEl.textContent = message || "";
+}
+
+function setGoalError(message) {
+  const errorEl = document.getElementById("calorie-goal-error");
   if (!errorEl) return;
   errorEl.textContent = message || "";
 }
@@ -1357,9 +1406,13 @@ function renderMacroModal(summary) {
   const totalMacroCalories = macroCalories.protein + macroCalories.carbs + macroCalories.fat;
   const goalText = `${formatCalories(summary.goalCalories)} kcal`;
 
-  goalCopy.textContent = summary.goalSource === "maintenance"
-    ? `Goal is based on your maintenance estimate: ${goalText}.`
-    : `Goal is using the quick default estimate: ${goalText}.`;
+  if (summary.goalSource === "saved-goal") {
+    goalCopy.textContent = `Goal uses ${summary.goalLabel}: ${goalText}.`;
+  } else if (summary.goalSource === "maintenance-default") {
+    goalCopy.textContent = `Goal matches your maintenance estimate: ${goalText}.`;
+  } else {
+    goalCopy.textContent = `Goal is using the quick default estimate: ${goalText}.`;
+  }
   totalCopy.textContent = `${formatCalories(summary.consumedCalories)} kcal eaten today`;
   proteinValue.textContent = `${summary.protein}g`;
   carbsValue.textContent = `${summary.carbs}g`;
@@ -1443,7 +1496,9 @@ function renderSummaryCard(summary) {
   maintenanceCopy.textContent = summary.maintenanceCalories
     ? `Maintenance ${formatCalories(summary.maintenanceCalories)} kcal`
     : "Maintenance --";
-  goalCopy.textContent = `Goal ${formatCalories(summary.goalCalories)} kcal`;
+  goalCopy.textContent = summary.goalSource === "saved-goal"
+    ? `Goal ${formatCalories(summary.goalCalories)} kcal (${summary.goalLabel})`
+    : `Goal ${formatCalories(summary.goalCalories)} kcal`;
   remainingValue.textContent = formatCalories(summary.remainingCalories);
   remainingLabel.textContent = "Remaining";
   proteinValue.textContent = formatMacroProgress(summary.protein, macroTargets.protein);
@@ -1459,10 +1514,330 @@ function renderTrackerView(state) {
 
   renderSummaryCard(summary);
   renderMacroModal(summary);
+  renderGoalModalState(latestState);
   renderReminder(summary);
   renderFeed(summary);
   renderRecentFoods(summary);
   maybeSendReminderNotification(summary);
+}
+
+function isValidGoalObjective(objective) {
+  return CALORIE_GOAL_OBJECTIVES.includes(objective);
+}
+
+function getGoalObjectiveMeta(objective) {
+  return isValidGoalObjective(objective) ? GOAL_OBJECTIVE_META[objective] : null;
+}
+
+function getSelectedGoalPreset() {
+  const preset = getCalorieGoalPreset(selectedGoalPresetKey);
+  if (!preset || preset.objective !== selectedGoalObjective) return null;
+  return preset;
+}
+
+function getGoalStepCopy(objective, maintenanceCalories) {
+  const maintenanceText = maintenanceCalories !== null
+    ? `${formatCalories(maintenanceCalories)} kcal`
+    : "your TDEE";
+
+  if (objective === "lose") {
+    return {
+      phase: "Cutting",
+      title: "Choose your calorie deficit",
+      note: `Each option below sets a daily target below ${maintenanceText}.`
+    };
+  }
+
+  if (objective === "gain") {
+    return {
+      phase: "Bulking",
+      title: "Choose your calorie surplus",
+      note: `Each option below sets a daily target above ${maintenanceText}.`
+    };
+  }
+
+  if (objective === "maintain") {
+    return {
+      phase: "Maintenance",
+      title: "Stay right at maintenance",
+      note: `This keeps your goal aligned with ${maintenanceText}.`
+    };
+  }
+
+  return {
+    phase: "Step 2",
+    title: "Pick your pace",
+    note: "Each option below turns your TDEE into one exact daily calorie goal."
+  };
+}
+
+function getGoalMissingReasonItems(state) {
+  const reasons = getCalorieMissingReasons(state);
+  const items = new Array(reasons.length);
+  for (let i = 0; i < reasons.length; i += 1) {
+    items[i] = GOAL_MISSING_REASON_LABELS[reasons[i]] || "Complete your calorie setup";
+  }
+  return items;
+}
+
+function renderGoalObjectiveOptions() {
+  const container = document.getElementById("calorie-goal-objective-options");
+  if (!container) return;
+
+  const markup = new Array(CALORIE_GOAL_OBJECTIVES.length);
+  for (let i = 0; i < CALORIE_GOAL_OBJECTIVES.length; i += 1) {
+    const objective = CALORIE_GOAL_OBJECTIVES[i];
+    const meta = getGoalObjectiveMeta(objective);
+    const isSelected = selectedGoalObjective === objective;
+
+    markup[i] = `<button type="button"
+      class="calorie-goal-option-card${isSelected ? " is-selected" : ""}"
+      data-action="select-calorie-goal-objective"
+      data-goal-objective="${escapeHtml(objective)}"
+      aria-pressed="${isSelected ? "true" : "false"}">
+      <span class="calorie-goal-option-indicator" aria-hidden="true"></span>
+      <div class="calorie-goal-copy">
+        <div class="calorie-goal-option-title-row">
+          <p class="apple-subtitle apple-subtitle-sm">${escapeHtml(meta.title)}</p>
+          <span class="calorie-goal-badge">${escapeHtml(meta.badge)}</span>
+        </div>
+        <p class="apple-caption">${escapeHtml(meta.description)}</p>
+      </div>
+    </button>`;
+  }
+
+  container.innerHTML = markup.join("");
+}
+
+function renderGoalPresetOptions(state) {
+  const phaseLabel = document.getElementById("calorie-goal-phase-label");
+  const title = document.getElementById("calorie-goal-step-title");
+  const note = document.getElementById("calorie-goal-step-note");
+  const missingCard = document.getElementById("calorie-goal-missing-card");
+  const missingNote = document.getElementById("calorie-goal-missing-note");
+  const missingList = document.getElementById("calorie-goal-missing-list");
+  const container = document.getElementById("calorie-goal-preset-options");
+
+  if (!phaseLabel || !title || !note || !missingCard || !missingNote || !missingList || !container) {
+    return;
+  }
+
+  const goalSummary = resolveCalorieGoalFromState(state);
+  const maintenanceCalories = goalSummary.maintenanceCalories;
+  const copy = getGoalStepCopy(selectedGoalObjective, maintenanceCalories);
+
+  phaseLabel.textContent = copy.phase;
+  title.textContent = copy.title;
+  note.textContent = copy.note;
+
+  if (!isValidGoalObjective(selectedGoalObjective)) {
+    missingCard.classList.add("hidden");
+    missingList.innerHTML = "";
+    container.innerHTML = "";
+    return;
+  }
+
+  if (maintenanceCalories === null) {
+    const missingItems = getGoalMissingReasonItems(state);
+    missingNote.textContent = "We need enough profile data to calculate your TDEE before we can save a goal.";
+    missingList.innerHTML = missingItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    missingCard.classList.remove("hidden");
+    container.innerHTML = "";
+    return;
+  }
+
+  missingCard.classList.add("hidden");
+  missingList.innerHTML = "";
+
+  const presets = getCalorieGoalPresets(selectedGoalObjective);
+  const markup = new Array(presets.length);
+  for (let i = 0; i < presets.length; i += 1) {
+    const preset = presets[i];
+    const isSelected = preset.key === selectedGoalPresetKey;
+    const targetCalories = Math.max(0, maintenanceCalories + preset.delta);
+    const appliedDeltaText = preset.delta === 0
+      ? "Matches maintenance"
+      : `${formatSignedCalories(preset.delta)} kcal vs TDEE`;
+
+    markup[i] = `<button type="button"
+      class="calorie-goal-preset-card${isSelected ? " is-selected" : ""}"
+      data-action="select-calorie-goal-preset"
+      data-goal-preset="${escapeHtml(preset.key)}"
+      aria-pressed="${isSelected ? "true" : "false"}">
+      <div class="calorie-goal-preset-top">
+        <div class="calorie-goal-copy">
+          <div class="calorie-goal-preset-header">
+            <p class="apple-subtitle apple-subtitle-sm">${escapeHtml(preset.title)}</p>
+            ${preset.recommended ? '<span class="calorie-goal-badge">Recommended</span>' : ""}
+          </div>
+          <p class="apple-caption">${escapeHtml(`${preset.phase} · ${preset.approach}`)}</p>
+        </div>
+      </div>
+      <div class="calorie-goal-preset-body">
+        <div class="calorie-goal-preset-target-block">
+          <div class="calorie-goal-preset-target">
+            <span class="calorie-goal-target">${formatCalories(targetCalories)}</span>
+            <span class="calorie-goal-target-unit">kcal/day</span>
+          </div>
+          <p class="apple-caption calorie-goal-preset-delta">${escapeHtml(appliedDeltaText)}</p>
+        </div>
+        <div class="calorie-goal-preset-grid">
+          <div class="calorie-goal-metric">
+            <span class="calorie-goal-metric-label">Range</span>
+            <span class="calorie-goal-metric-value">${escapeHtml(preset.rangeText)}</span>
+          </div>
+          <div class="calorie-goal-metric">
+            <span class="calorie-goal-metric-label">Expected rate</span>
+            <span class="calorie-goal-metric-value">${escapeHtml(preset.rateText)}</span>
+          </div>
+        </div>
+      </div>
+      <p class="apple-caption calorie-goal-preset-note">${escapeHtml(preset.notes)}</p>
+    </button>`;
+  }
+
+  container.innerHTML = markup.join("");
+}
+
+function syncGoalStepUi(state) {
+  const track = document.getElementById("calorie-goal-step-track");
+  const label = document.getElementById("calorie-goal-step-label");
+  const dots = document.querySelectorAll("#calorie-goal-step-dots .calorie-step-dot");
+  const backBtn = document.getElementById("calorie-goal-back-btn");
+  const primaryBtn = document.getElementById("calorie-goal-primary-btn");
+
+  if (!track || !label || !backBtn || !primaryBtn) return;
+
+  track.style.transform = `translateX(-${goalCurrentStep * 100}%)`;
+  label.textContent = `Step ${goalCurrentStep + 1} of ${GOAL_STEP_COUNT}`;
+
+  const hasObjective = isValidGoalObjective(selectedGoalObjective);
+  const hasMaintenance = resolveCalorieGoalFromState(state).maintenanceCalories !== null;
+  const selectedPreset = getSelectedGoalPreset();
+
+  for (let i = 0; i < dots.length; i += 1) {
+    const isActive = i === goalCurrentStep;
+    const isDisabled = i > 0 && !hasObjective;
+    dots[i].classList.toggle("is-active", isActive);
+    dots[i].classList.toggle("is-disabled", isDisabled);
+    dots[i].disabled = isDisabled;
+  }
+
+  backBtn.classList.toggle("hidden", goalCurrentStep === 0);
+  primaryBtn.textContent = goalCurrentStep === 0 ? "Continue" : "Save goal";
+  primaryBtn.disabled = goalCurrentStep === 0
+    ? !hasObjective
+    : !(hasMaintenance && selectedPreset);
+}
+
+function renderGoalModalState(state) {
+  renderGoalObjectiveOptions();
+  renderGoalPresetOptions(state);
+  syncGoalStepUi(state);
+}
+
+function applyGoalSelectionFromState(state) {
+  const savedGoal = getCalorieGoal(state);
+  selectedGoalObjective = savedGoal.objective || "";
+  selectedGoalPresetKey = savedGoal.presetKey || (savedGoal.objective === "maintain" ? "maintain" : "");
+  goalCurrentStep = 0;
+  setGoalError("");
+  renderGoalModalState(state);
+}
+
+function openGoalModal() {
+  latestState = latestState || loadState();
+  applyGoalSelectionFromState(latestState);
+  closeTrackerOverlays("calorie-goal-modal");
+  openOverlay("calorie-goal-modal");
+}
+
+function closeGoalModal() {
+  setGoalError("");
+  closeOverlay("calorie-goal-modal");
+}
+
+function selectGoalObjective(objective) {
+  if (!isValidGoalObjective(objective)) return;
+
+  selectedGoalObjective = objective;
+  const currentPreset = getCalorieGoalPreset(selectedGoalPresetKey);
+  if (objective === "maintain") {
+    selectedGoalPresetKey = "maintain";
+  } else if (!currentPreset || currentPreset.objective !== objective) {
+    selectedGoalPresetKey = "";
+  }
+
+  setGoalError("");
+  renderGoalModalState(latestState || loadState());
+}
+
+function selectGoalPreset(presetKey) {
+  const preset = getCalorieGoalPreset(presetKey);
+  if (!preset || preset.objective !== selectedGoalObjective) return;
+
+  selectedGoalPresetKey = preset.key;
+  setGoalError("");
+  renderGoalModalState(latestState || loadState());
+}
+
+function moveGoalStep(nextIndex) {
+  if (nextIndex > 0 && !isValidGoalObjective(selectedGoalObjective)) {
+    setGoalError("Choose whether you want to lose, maintain, or gain.");
+    return false;
+  }
+
+  goalCurrentStep = Math.max(0, Math.min(GOAL_STEP_COUNT - 1, nextIndex));
+  setGoalError("");
+  renderGoalModalState(latestState || loadState());
+  return true;
+}
+
+function openSetupFromGoalModal() {
+  hideOverlayImmediately("calorie-goal-modal");
+  openSetupModal();
+}
+
+function saveGoalSelection() {
+  const state = latestState || loadState();
+  const resolvedGoal = resolveCalorieGoalFromState(state);
+  const preset = getSelectedGoalPreset();
+
+  if (resolvedGoal.maintenanceCalories === null) {
+    setGoalError("Complete calorie setup before saving a goal.");
+    return false;
+  }
+
+  if (!preset) {
+    setGoalError("Choose a goal option to continue.");
+    return false;
+  }
+
+  latestState = setCalorieGoal({
+    objective: preset.objective,
+    presetKey: preset.key
+  });
+
+  closeGoalModal();
+  renderTrackerView(latestState);
+  showToast("Calorie goal updated");
+  return true;
+}
+
+function advanceGoalFlow() {
+  if (goalCurrentStep === 0) {
+    if (!isValidGoalObjective(selectedGoalObjective)) {
+      setGoalError("Choose whether you want to lose, maintain, or gain.");
+      return false;
+    }
+
+    goalCurrentStep = 1;
+    setGoalError("");
+    renderGoalModalState(latestState || loadState());
+    return true;
+  }
+
+  return saveGoalSelection();
 }
 
 async function requestMealEstimate({ mode, note, files }) {
@@ -2508,7 +2883,7 @@ function submitSetupForm() {
   latestState = loadState();
   closeSetupModal();
   renderTrackerView(latestState);
-  showToast("Daily goal updated");
+  showToast("Calorie setup updated");
 }
 
 function bindSetupEvents() {
@@ -2708,6 +3083,49 @@ export function handleDocumentClick(event) {
       return true;
     }
 
+    if (actionName === "open-calorie-goal-modal") {
+      openGoalModal();
+      return true;
+    }
+
+    if (actionName === "close-calorie-goal-modal") {
+      closeGoalModal();
+      return true;
+    }
+
+    if (actionName === "select-calorie-goal-objective") {
+      selectGoalObjective(action.getAttribute("data-goal-objective"));
+      return true;
+    }
+
+    if (actionName === "select-calorie-goal-preset") {
+      selectGoalPreset(action.getAttribute("data-goal-preset"));
+      return true;
+    }
+
+    if (actionName === "go-calorie-goal-step") {
+      const index = parseInt(action.getAttribute("data-step-index"), 10);
+      if (!Number.isNaN(index)) {
+        moveGoalStep(index);
+      }
+      return true;
+    }
+
+    if (actionName === "go-calorie-goal-back") {
+      moveGoalStep(goalCurrentStep - 1);
+      return true;
+    }
+
+    if (actionName === "advance-calorie-goal") {
+      advanceGoalFlow();
+      return true;
+    }
+
+    if (actionName === "open-calorie-goal-setup") {
+      openSetupFromGoalModal();
+      return true;
+    }
+
     if (actionName === "open-calorie-setup-modal") {
       openSetupModal();
       return true;
@@ -2761,6 +3179,11 @@ export function handleDocumentClick(event) {
 
   if (target === document.getElementById("calorie-preview-modal")) {
     closePreviewModal();
+    return true;
+  }
+
+  if (target === document.getElementById("calorie-goal-modal")) {
+    closeGoalModal();
     return true;
   }
 
@@ -2852,6 +3275,11 @@ export function handleEscape() {
     return;
   }
 
+  if (isOverlayOpen("calorie-goal-modal")) {
+    closeGoalModal();
+    return;
+  }
+
   if (isOverlayOpen("calorie-setup-modal")) {
     closeSetupModal();
   }
@@ -2886,6 +3314,9 @@ export function onViewportChange() {
 
 export function resetViewUiState() {
   currentStep = 0;
+  goalCurrentStep = 0;
+  selectedGoalObjective = "";
+  selectedGoalPresetKey = "";
   touchTracking = false;
   previewDraft = null;
   previewMode = "create";
@@ -2912,6 +3343,7 @@ export function resetViewUiState() {
   setManualError("");
   setPreviewError("");
   setSetupError("");
+  setGoalError("");
   closeFabMenu();
 
   const deleteSheet = document.getElementById("calorie-delete-sheet");
@@ -2925,6 +3357,7 @@ export function resetViewUiState() {
   hideOverlayImmediately("calorie-macro-modal");
   hideOverlayImmediately("calorie-manual-modal");
   hideOverlayImmediately("calorie-preview-modal");
+  hideOverlayImmediately("calorie-goal-modal");
   hideOverlayImmediately("calorie-setup-modal");
   unlockCalorieOverlayScrollNow();
 }

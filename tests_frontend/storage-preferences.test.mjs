@@ -40,6 +40,10 @@ test("legacy users without preferences normalize to defaults", () => {
 
   const state = storage.loadState();
   assert.equal(state.user.name, "Legacy");
+  assert.deepEqual(state.user.calorieGoal, {
+    objective: null,
+    presetKey: null
+  });
   assert.deepEqual(state.user.preferences, {
     heightUnit: "cm",
     weightUnit: "kg"
@@ -68,6 +72,65 @@ test("setUserPreferences supports partial updates and persists", () => {
   assert.deepEqual(storage.getUserPreferences(reloaded), {
     heightUnit: "ft-in",
     weightUnit: "lb"
+  });
+});
+
+test("calorie goals persist across reloads", () => {
+  resetStorage();
+
+  storage.setUserName("Goal");
+  let state = storage.setCalorieGoal({
+    objective: "gain",
+    presetKey: "bulk-lean"
+  });
+
+  assert.deepEqual(storage.getCalorieGoal(state), {
+    objective: "gain",
+    presetKey: "bulk-lean"
+  });
+
+  state = storage.loadState();
+  assert.deepEqual(storage.getCalorieGoal(state), {
+    objective: "gain",
+    presetKey: "bulk-lean"
+  });
+});
+
+test("calorie goal normalization salvages valid presets safely", () => {
+  resetStorage();
+
+  localStorage.setItem("maxmode_user", JSON.stringify({
+    name: "Goal Legacy",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    calorieGoal: {
+      objective: "lose",
+      presetKey: "bulk-lean"
+    }
+  }));
+
+  const state = storage.loadState();
+  assert.deepEqual(storage.getCalorieGoal(state), {
+    objective: "gain",
+    presetKey: "bulk-lean"
+  });
+});
+
+test("invalid calorie goal values normalize to empty goal", () => {
+  resetStorage();
+
+  localStorage.setItem("maxmode_user", JSON.stringify({
+    name: "Goal Legacy",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    calorieGoal: {
+      objective: "something",
+      presetKey: "unknown"
+    }
+  }));
+
+  const state = storage.loadState();
+  assert.deepEqual(storage.getCalorieGoal(state), {
+    objective: null,
+    presetKey: null
   });
 });
 

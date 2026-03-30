@@ -1205,6 +1205,234 @@ html.no-view-transition .htmx-settling {
   font-size: 0.9rem;
 }
 
+.calorie-goal-shell {
+  margin-top: 0.45rem;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  gap: 0.85rem;
+  overflow: hidden;
+}
+
+#calorie-goal-step-viewport {
+  min-height: 0;
+  overflow: hidden;
+}
+
+#calorie-goal-step-track {
+  height: 100%;
+}
+
+.calorie-goal-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+.calorie-goal-step-copy,
+.calorie-goal-missing-copy,
+.calorie-goal-copy {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.calorie-goal-option-list,
+.calorie-goal-preset-list {
+  display: grid;
+  gap: 0.62rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 0.12rem;
+  padding-bottom: 0.2rem;
+  align-content: start;
+}
+
+.calorie-goal-option-card,
+.calorie-goal-preset-card {
+  appearance: none;
+  width: 100%;
+  border: 1px solid var(--apple-separator);
+  border-radius: calc(var(--apple-radius-control) + 4px);
+  padding: 0.74rem 0.8rem;
+  background: var(--apple-surface-elevated);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.calorie-goal-option-card:hover,
+.calorie-goal-preset-card:hover {
+  border-color: var(--apple-opaque-separator);
+  transform: translateY(-1px);
+}
+
+.calorie-goal-option-card:focus-visible,
+.calorie-goal-preset-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--apple-focus-ring);
+}
+
+.calorie-goal-option-card.is-selected,
+.calorie-goal-preset-card.is-selected {
+  border-color: var(--chart-line-strong);
+  box-shadow: 0 0 0 1px var(--chart-line-strong);
+  background: color-mix(in srgb, var(--chart-line-strong) 8%, var(--apple-surface));
+}
+
+.calorie-goal-option-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.calorie-goal-option-indicator {
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--apple-radius-pill);
+  border: 1.5px solid var(--apple-opaque-separator);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calorie-goal-option-card.is-selected .calorie-goal-option-indicator {
+  border-color: var(--chart-line-strong);
+  background: color-mix(in srgb, var(--chart-line-strong) 18%, transparent);
+}
+
+.calorie-goal-option-card.is-selected .calorie-goal-option-indicator::before {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: var(--apple-radius-pill);
+  background: var(--chart-line-strong);
+}
+
+.calorie-goal-option-title-row,
+.calorie-goal-preset-header,
+.calorie-goal-preset-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.calorie-goal-preset-card {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.calorie-goal-preset-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.6rem 0.8rem;
+  align-items: start;
+}
+
+.calorie-goal-preset-target-block {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.calorie-goal-preset-target {
+  display: flex;
+  align-items: baseline;
+  gap: 0.38rem;
+  flex-wrap: wrap;
+}
+
+.calorie-goal-target {
+  font-size: clamp(1.55rem, 3.5vw, 2.1rem);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.calorie-goal-target-unit {
+  color: var(--apple-secondary-label);
+  font-size: 0.88rem;
+}
+
+.calorie-goal-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.6rem;
+}
+
+.calorie-goal-metric {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.calorie-goal-metric-label {
+  color: var(--apple-secondary-label);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.calorie-goal-metric-value {
+  font-size: 0.88rem;
+}
+
+.calorie-goal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.45rem;
+  padding: 0.14rem 0.55rem;
+  border-radius: var(--apple-radius-pill);
+  background: color-mix(in srgb, var(--chart-line-strong) 14%, transparent);
+  color: var(--chart-line-strong);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.calorie-goal-preset-delta,
+.calorie-goal-preset-note {
+  color: var(--apple-secondary-label);
+}
+
+.calorie-goal-footer {
+  padding-top: 0.4rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+}
+
+.calorie-goal-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+#calorie-goal-back-btn.hidden + #calorie-goal-primary-btn {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .calorie-goal-preset-body,
+  .calorie-goal-preset-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @keyframes calories-card-enter {
   from {
     opacity: 0;
@@ -3073,17 +3301,20 @@ html.no-view-transition .htmx-settling {
   background: var(--apple-overlay);
 }
 
+#calorie-goal-modal,
 #calorie-setup-modal {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
+#calorie-goal-modal.is-open,
 #calorie-setup-modal.is-open {
   opacity: 1;
   pointer-events: auto;
 }
 
+#calorie-goal-modal.is-closing,
 #calorie-setup-modal.is-closing {
   opacity: 0;
   pointer-events: none;
@@ -3216,7 +3447,17 @@ html.no-view-transition .htmx-settling {
   opacity: 1;
 }
 
+#calorie-goal-modal.is-open .apple-modal-calorie-goal {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
 #calorie-setup-modal.is-closing .apple-modal-calories {
+  transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
+  opacity: 0;
+}
+
+#calorie-goal-modal.is-closing .apple-modal-calorie-goal {
   transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
   opacity: 0;
 }
@@ -4786,6 +5027,12 @@ html.no-view-transition .htmx-settling {
 }
 
 @media (min-width: 641px) {
+  #calorie-goal-modal.app-overlay-calories {
+    align-items: flex-start;
+    padding-top: calc(3.5rem + env(safe-area-inset-top) + 0.95rem);
+    padding-bottom: 1.35rem;
+  }
+
   .calorie-update-toast {
     top: var(--calorie-toast-phone-edge-offset);
     bottom: auto;
@@ -4870,6 +5117,8 @@ html.no-view-transition .htmx-settling {
   #main-content,
   #weight-modal,
   #weight-modal .apple-modal-weight,
+  #calorie-goal-modal,
+  #calorie-goal-modal .apple-modal-calorie-goal,
   #calorie-setup-modal,
   #calorie-setup-modal .apple-modal-calories,
   #profile-activity-modal,

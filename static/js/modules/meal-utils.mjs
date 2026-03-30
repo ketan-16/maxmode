@@ -1,6 +1,9 @@
-import { calculateMaintenanceFromState } from "./calories-utils.mjs";
+import {
+  DEFAULT_DAILY_GOAL as BASE_DEFAULT_DAILY_GOAL,
+  resolveCalorieGoalFromState
+} from "./calories-utils.mjs";
 
-export const DEFAULT_DAILY_GOAL = 2000;
+export const DEFAULT_DAILY_GOAL = BASE_DEFAULT_DAILY_GOAL;
 export const PORTION_MIN = 0.5;
 export const PORTION_MAX = 2.5;
 export const PORTION_STEP = 0.25;
@@ -353,18 +356,20 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     fat += normalizeMacroValue(todaysMeals[i].fat);
   }
 
-  const maintenanceSummary = calculateMaintenanceFromState(state);
-  const goalCalories = maintenanceSummary && maintenanceSummary.maintenanceRounded
-    ? maintenanceSummary.maintenanceRounded
-    : DEFAULT_DAILY_GOAL;
+  const goalSummary = resolveCalorieGoalFromState(state);
+  const goalCalories = goalSummary.goalCalories;
 
   const remainingCalories = goalCalories - consumedCalories;
   const progressRatio = goalCalories > 0 ? (consumedCalories / goalCalories) : 0;
 
   return {
-    maintenanceCalories: maintenanceSummary ? maintenanceSummary.maintenanceRounded : null,
+    maintenanceCalories: goalSummary.maintenanceCalories,
     goalCalories,
-    goalSource: maintenanceSummary ? "maintenance" : "estimated",
+    goalSource: goalSummary.goalSource,
+    goalObjective: goalSummary.goalObjective,
+    goalPresetKey: goalSummary.goalPresetKey,
+    goalLabel: goalSummary.goalLabel,
+    goalDelta: goalSummary.goalDelta,
     consumedCalories,
     remainingCalories,
     protein,

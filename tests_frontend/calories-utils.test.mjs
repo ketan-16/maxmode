@@ -10,6 +10,7 @@ import {
   getCalorieMissingReasons,
   kgToLb,
   lbToKg,
+  resolveCalorieGoalFromState,
   weightToKg
 } from "../static/js/modules/calories-utils.mjs";
 
@@ -76,6 +77,104 @@ test("calculateMaintenanceFromState uses latest logged weight", () => {
   assert.ok(summary);
   assert.equal(summary.weightKg, 78);
   assert.equal(summary.maintenanceRounded, Math.round(summary.maintenance));
+});
+
+test("saved calorie goals resolve to exact targets from maintenance", () => {
+  const state = {
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      },
+      calorieGoal: {
+        objective: "lose",
+        presetKey: "cut-moderate"
+      }
+    },
+    chartSeries: [
+      { weight: 80, timestamp: 1 },
+      { weight: 78, timestamp: 2 }
+    ]
+  };
+
+  const summary = resolveCalorieGoalFromState(state);
+  assert.equal(summary.goalSource, "saved-goal");
+  assert.equal(summary.goalPresetKey, "cut-moderate");
+  assert.equal(summary.goalDelta, -400);
+  assert.equal(summary.goalCalories, summary.maintenanceCalories - 400);
+});
+
+test("maintain preset resolves to exact maintenance", () => {
+  const state = {
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      },
+      calorieGoal: {
+        objective: "maintain",
+        presetKey: "maintain"
+      }
+    },
+    chartSeries: [
+      { weight: 80, timestamp: 1 }
+    ]
+  };
+
+  const summary = resolveCalorieGoalFromState(state);
+  assert.equal(summary.goalSource, "saved-goal");
+  assert.equal(summary.goalCalories, summary.maintenanceCalories);
+  assert.equal(summary.goalDelta, 0);
+});
+
+test("goal resolver falls back cleanly when maintenance cannot be calculated", () => {
+  const summary = resolveCalorieGoalFromState({
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      },
+      calorieGoal: {
+        objective: "gain",
+        presetKey: "bulk-dirty"
+      }
+    },
+    chartSeries: []
+  });
+
+  assert.equal(summary.goalSource, "estimated-default");
+  assert.equal(summary.goalCalories, 2000);
+  assert.equal(summary.goalPresetKey, "bulk-dirty");
 });
 
 test("missing reason helper reports required gaps", () => {

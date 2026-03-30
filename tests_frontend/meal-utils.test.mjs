@@ -146,9 +146,45 @@ test("buildCalorieTrackerSummary computes progress, streak, and recent foods", (
   assert.equal(summary.protein, 62);
   assert.equal(summary.mealCount, 2);
   assert.equal(summary.streakCount, 3);
-  assert.equal(summary.goalSource, "maintenance");
+  assert.equal(summary.goalSource, "maintenance-default");
   assert.equal(summary.feedback, "You're on track");
   assert.equal(summary.reminder.title, "Log dinner?");
   assert.deepEqual(frequentFoods.map((item) => item.name), ["Chicken bowl", "Greek yogurt", "Oatmeal"]);
   assert.deepEqual(recentFoods.map((item) => item.name), ["Chicken bowl", "Greek yogurt", "Oatmeal"]);
+});
+
+test("buildCalorieTrackerSummary uses a saved calorie goal when available", () => {
+  const state = {
+    user: {
+      name: "A",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      calorieProfile: {
+        age: 30,
+        gender: "male",
+        activityLevel: "lightly-active",
+        height: {
+          unit: "cm",
+          cm: 180,
+          ft: 5,
+          in: 11,
+          heightCm: 180
+        }
+      },
+      calorieGoal: {
+        objective: "lose",
+        presetKey: "cut-moderate"
+      }
+    },
+    chartSeries: [
+      { weight: 78, timestamp: 1 }
+    ],
+    meals: []
+  };
+
+  const summary = buildCalorieTrackerSummary(state, new Date("2026-03-27T18:30:00"));
+
+  assert.equal(summary.goalSource, "saved-goal");
+  assert.equal(summary.goalPresetKey, "cut-moderate");
+  assert.equal(summary.goalLabel, "Moderate cut");
+  assert.equal(summary.goalCalories, summary.maintenanceCalories - 400);
 });

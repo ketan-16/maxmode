@@ -23,8 +23,8 @@ import {
   renderWeightsTrendChart
 } from "../modules/charts.mjs";
 import {
-  calculateMaintenanceFromState,
-  kgToLb
+  kgToLb,
+  resolveCalorieGoalFromState
 } from "../modules/calories-utils.mjs";
 
 const SWIPE_CONFIG = {
@@ -346,12 +346,12 @@ function hideCalorieToast() {
   }, 180);
 }
 
-function showCalorieUpdateToast() {
+function showCalorieUpdateToast(message = "Maintenance calories adjusted to current weight") {
   const toast = document.getElementById("calorie-update-toast");
   if (!toast) return;
 
   clearCalorieToastTimers();
-  toast.textContent = "Maintenance calories adjusted to current weight";
+  toast.textContent = message;
   toast.classList.remove("hidden");
   requestAnimationFrame(() => {
     toast.classList.add("is-visible");
@@ -988,7 +988,7 @@ export function handleWeightSubmit(event) {
   if (!Number.isFinite(value) || value <= 0) return;
   const unit = (unitInput.value === "lb") ? "lb" : "kg";
 
-  const beforeSummary = calculateMaintenanceFromState(loadState());
+  const beforeSummary = resolveCalorieGoalFromState(loadState());
 
   if (editingWeightId) {
     if (!updateWeight(editingWeightId, value, unit)) return;
@@ -996,9 +996,13 @@ export function handleWeightSubmit(event) {
     addWeight(value, unit);
   }
 
-  const afterSummary = calculateMaintenanceFromState(loadState());
-  if (beforeSummary && afterSummary && beforeSummary.maintenanceRounded !== afterSummary.maintenanceRounded) {
-    showCalorieUpdateToast();
+  const afterSummary = resolveCalorieGoalFromState(loadState());
+  if (beforeSummary && afterSummary && beforeSummary.goalCalories !== afterSummary.goalCalories) {
+    showCalorieUpdateToast(
+      afterSummary.goalSource === "saved-goal"
+        ? "Calorie goal adjusted to current weight"
+        : "Maintenance calories adjusted to current weight"
+    );
   }
 
   closeWeightModal();

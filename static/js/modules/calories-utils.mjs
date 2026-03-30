@@ -41,6 +41,114 @@ export const ACTIVITY_OPTIONS = [
   }
 ];
 
+export const DEFAULT_DAILY_GOAL = 2000;
+
+export const CALORIE_GOAL_OBJECTIVES = ["lose", "maintain", "gain"];
+
+export const CALORIE_GOAL_PRESETS = Object.freeze([
+  {
+    key: "cut-slow",
+    objective: "lose",
+    phase: "Cut",
+    title: "Slow cut",
+    approach: "Slow",
+    delta: -250,
+    rangeText: "-200 to -300 kcal/day",
+    rateText: "~0.25 kg/week",
+    notes: "Best for preserving muscle; ideal near competition",
+    recommended: false
+  },
+  {
+    key: "cut-moderate",
+    objective: "lose",
+    phase: "Cut",
+    title: "Moderate cut",
+    approach: "Moderate",
+    delta: -400,
+    rangeText: "-300 to -500 kcal/day",
+    rateText: "~0.5 kg/week",
+    notes: "Optimal balance of fat loss and muscle retention (Garthe et al., 2011)",
+    recommended: true
+  },
+  {
+    key: "cut-aggressive",
+    objective: "lose",
+    phase: "Cut",
+    title: "Aggressive cut",
+    approach: "Aggressive",
+    delta: -625,
+    rangeText: "-500 to -750 kcal/day",
+    rateText: "~0.5-0.75 kg/week",
+    notes: "Increased lean mass loss risk; use short-term only",
+    recommended: false
+  },
+  {
+    key: "cut-max",
+    objective: "lose",
+    phase: "Cut",
+    title: "Maximum cut",
+    approach: "Maximum limit",
+    delta: -1000,
+    rangeText: "-1,000 kcal/day",
+    rateText: "~1 kg/week",
+    notes: "Beyond this: muscle catabolism and hormonal disruption (ISSN/ACSM)",
+    recommended: false
+  },
+  {
+    key: "maintain",
+    objective: "maintain",
+    phase: "Maintain",
+    title: "Maintain",
+    approach: "Maintain",
+    delta: 0,
+    rangeText: "0 kcal/day",
+    rateText: "Weight stays stable",
+    notes: "Matches your current TDEE to hold body weight steady",
+    recommended: true
+  },
+  {
+    key: "bulk-lean",
+    objective: "gain",
+    phase: "Bulk",
+    title: "Lean bulk",
+    approach: "Lean bulk",
+    delta: 300,
+    rangeText: "+200 to +400 kcal/day",
+    rateText: "Varies by training age",
+    notes: "Minimizes fat gain while supporting hypertrophy",
+    recommended: true
+  },
+  {
+    key: "bulk-aggressive",
+    objective: "gain",
+    phase: "Bulk",
+    title: "Aggressive bulk",
+    approach: "Aggressive",
+    delta: 625,
+    rangeText: "+500 to +750 kcal/day",
+    rateText: "Faster scale weight gain",
+    notes: "Higher fat accumulation; suited to beginners with greater muscle gain potential",
+    recommended: false
+  },
+  {
+    key: "bulk-dirty",
+    objective: "gain",
+    phase: "Bulk",
+    title: "Dirty bulk",
+    approach: "Dirty bulk",
+    delta: 1000,
+    rangeText: ">+1,000 kcal/day",
+    rateText: "Mostly fat gain",
+    notes: "Not evidence-supported; excess calories convert primarily to fat",
+    recommended: false
+  }
+]);
+
+const CALORIE_GOAL_PRESET_MAP = CALORIE_GOAL_PRESETS.reduce((acc, preset) => {
+  acc[preset.key] = preset;
+  return acc;
+}, {});
+
 const LB_TO_KG = 0.45359237;
 
 function parseNumber(value) {
@@ -130,6 +238,16 @@ export function getActivityOption(activityLevel) {
 export function formatActivityLevel(activityLevel, fallback = "Not set") {
   const option = getActivityOption(activityLevel);
   return option ? option.title : fallback;
+}
+
+export function getCalorieGoalPreset(presetKey) {
+  if (typeof presetKey !== "string") return null;
+  return CALORIE_GOAL_PRESET_MAP[presetKey] || null;
+}
+
+export function getCalorieGoalPresets(objective = null) {
+  if (!objective) return CALORIE_GOAL_PRESETS.slice();
+  return CALORIE_GOAL_PRESETS.filter((preset) => preset.objective === objective);
 }
 
 function normalizeAge(ageValue) {
@@ -249,6 +367,23 @@ export function isCalorieDataComplete(state) {
   return getCalorieMissingReasons(state).length === 0;
 }
 
+function readSavedGoal(state) {
+  const user = state && state.user ? state.user : null;
+  const goal = user && user.calorieGoal && typeof user.calorieGoal === "object"
+    ? user.calorieGoal
+    : null;
+  if (!goal) return null;
+
+  const preset = getCalorieGoalPreset(goal.presetKey);
+  if (!preset) return null;
+
+  return {
+    objective: preset.objective,
+    presetKey: preset.key,
+    preset
+  };
+}
+
 export function calculateMaintenanceFromState(state) {
   const user = state && state.user ? state.user : null;
   const profile = user && user.calorieProfile ? user.calorieProfile : null;
@@ -289,5 +424,45 @@ export function calculateMaintenanceFromState(state) {
     bmr,
     maintenance,
     maintenanceRounded: roundCalories(maintenance)
+  };
+}
+
+export function resolveCalorieGoalFromState(state) {
+  const maintenanceSummary = calculateMaintenanceFromState(state);
+  const maintenanceCalories = maintenanceSummary ? maintenanceSummary.maintenanceRounded : null;
+  const savedGoal = readSavedGoal(state);
+
+  if (maintenanceCalories !== null && savedGoal) {
+    return {
+      maintenanceCalories,
+      goalCalories: Math.max(0, maintenanceCalories + savedGoal.preset.delta),
+      goalSource: "saved-goal",
+      goalObjective: savedGoal.objective,
+      goalPresetKey: savedGoal.presetKey,
+      goalLabel: savedGoal.preset.title,
+      goalDelta: savedGoal.preset.delta
+    };
+  }
+
+  if (maintenanceCalories !== null) {
+    return {
+      maintenanceCalories,
+      goalCalories: maintenanceCalories,
+      goalSource: "maintenance-default",
+      goalObjective: null,
+      goalPresetKey: null,
+      goalLabel: "Maintenance",
+      goalDelta: 0
+    };
+  }
+
+  return {
+    maintenanceCalories: null,
+    goalCalories: DEFAULT_DAILY_GOAL,
+    goalSource: "estimated-default",
+    goalObjective: savedGoal ? savedGoal.objective : null,
+    goalPresetKey: savedGoal ? savedGoal.presetKey : null,
+    goalLabel: savedGoal ? savedGoal.preset.title : "Default estimate",
+    goalDelta: savedGoal ? savedGoal.preset.delta : null
   };
 }

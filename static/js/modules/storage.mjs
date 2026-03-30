@@ -1,9 +1,11 @@
 import { getChartReadyWeights, normalizeWeights } from "./data-utils.mjs";
 import {
   ACTIVITY_MULTIPLIERS,
+  CALORIE_GOAL_OBJECTIVES,
   CALORIE_GENDERS,
   cmToFeetInches,
   feetInchesToCm,
+  getCalorieGoalPreset,
   hasCalorieProfileBasics,
   weightToKg
 } from "./calories-utils.mjs";
@@ -140,6 +142,26 @@ function normalizeCalorieTrackerMeta(rawMeta) {
   };
 }
 
+function normalizeCalorieGoal(rawGoal) {
+  const source = (rawGoal && typeof rawGoal === "object") ? rawGoal : {};
+  const preset = getCalorieGoalPreset(source.presetKey);
+  const normalizedObjective = CALORIE_GOAL_OBJECTIVES.includes(source.objective)
+    ? source.objective
+    : null;
+
+  if (preset) {
+    return {
+      objective: preset.objective,
+      presetKey: preset.key
+    };
+  }
+
+  return {
+    objective: normalizedObjective,
+    presetKey: null
+  };
+}
+
 function normalizeUser(rawUser) {
   if (!rawUser || typeof rawUser !== "object") return null;
 
@@ -154,6 +176,7 @@ function normalizeUser(rawUser) {
     name,
     createdAt,
     calorieProfile: normalizeCalorieProfile(rawUser.calorieProfile),
+    calorieGoal: normalizeCalorieGoal(rawUser.calorieGoal),
     preferences: normalizePreferences(rawUser.preferences)
   };
 }
@@ -247,6 +270,14 @@ function mergePreferences(currentPreferences, patch) {
   });
 }
 
+function mergeCalorieGoal(currentGoal, patch) {
+  const sourcePatch = (patch && typeof patch === "object") ? patch : {};
+  return normalizeCalorieGoal({
+    ...normalizeCalorieGoal(currentGoal),
+    ...sourcePatch
+  });
+}
+
 function replaceWeights(nextWeights) {
   writeWeights(nextWeights);
   invalidateState();
@@ -285,6 +316,9 @@ export function setUserName(name) {
   const calorieProfile = current.user && current.user.calorieProfile
     ? current.user.calorieProfile
     : normalizeCalorieProfile(null);
+  const calorieGoal = current.user && current.user.calorieGoal
+    ? current.user.calorieGoal
+    : normalizeCalorieGoal(null);
   const preferences = current.user && current.user.preferences
     ? current.user.preferences
     : normalizePreferences(null);
@@ -293,6 +327,7 @@ export function setUserName(name) {
     name: trimmed,
     createdAt,
     calorieProfile,
+    calorieGoal,
     preferences
   });
 }
@@ -312,6 +347,23 @@ export function setCalorieProfile(profilePatch) {
   return setUser({
     ...current.user,
     calorieProfile
+  });
+}
+
+export function getCalorieGoal(state) {
+  const source = state || loadState();
+  if (!source.user) return normalizeCalorieGoal(null);
+  return normalizeCalorieGoal(source.user.calorieGoal);
+}
+
+export function setCalorieGoal(goalPatch) {
+  const current = loadState();
+  if (!current.user) return current;
+
+  const calorieGoal = mergeCalorieGoal(current.user.calorieGoal, goalPatch);
+  return setUser({
+    ...current.user,
+    calorieGoal
   });
 }
 

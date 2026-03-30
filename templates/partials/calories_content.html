@@ -8,9 +8,9 @@
           </div>
 
           <button type="button"
-                  data-action="open-calorie-setup-modal"
+                  data-action="open-calorie-goal-modal"
                   class="calories-summary-edit-btn">
-            Edit
+            Edit Goal
           </button>
         </div>
 
@@ -254,9 +254,9 @@
         </div>
 
         <button type="button"
-                data-action="open-calorie-setup-modal"
+                data-action="open-calorie-goal-modal"
                 class="apple-btn apple-btn-neutral apple-btn-block">
-          Personalize daily goal
+          Edit calorie goal
         </button>
       </div>
     </div>
@@ -436,6 +436,84 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="calorie-goal-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-calories apple-modal-calorie-goal" role="dialog" aria-modal="true" aria-labelledby="calorie-goal-title">
+      <div class="apple-modal-header">
+        <div>
+          <p class="apple-overline">Calorie Goal</p>
+          <h2 id="calorie-goal-title" class="apple-subtitle apple-subtitle-no-margin">Edit Goal</h2>
+        </div>
+        <button type="button" data-action="close-calorie-goal-modal" class="apple-icon-btn" aria-label="Close calorie goal">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="calorie-goal-shell">
+        <div id="calorie-goal-step-viewport" class="calorie-step-viewport">
+          <div id="calorie-goal-step-track" class="calorie-step-track">
+            <section class="calorie-step calorie-goal-step" data-calorie-goal-step="0">
+              <div class="calorie-goal-step-copy">
+                <p class="apple-overline">Step 1</p>
+                <h3 class="apple-subtitle apple-subtitle-sm">What are you aiming for?</h3>
+                <p class="apple-caption">We&apos;ll use your maintenance calories to set a daily target that fits your current phase.</p>
+              </div>
+              <div id="calorie-goal-objective-options" class="calorie-goal-option-list"></div>
+            </section>
+
+            <section class="calorie-step calorie-goal-step" data-calorie-goal-step="1">
+              <div class="calorie-goal-step-copy">
+                <p id="calorie-goal-phase-label" class="apple-overline">Step 2</p>
+                <h3 id="calorie-goal-step-title" class="apple-subtitle apple-subtitle-sm">Pick your pace</h3>
+                <p id="calorie-goal-step-note" class="apple-caption">Each option below turns your TDEE into one exact daily calorie goal.</p>
+              </div>
+
+              <div id="calorie-goal-missing-card" class="apple-card app-card calories-missing-card hidden">
+                <div class="calorie-goal-missing-copy">
+                  <p class="apple-subtitle apple-subtitle-sm">Finish setup to unlock goal targets</p>
+                  <p id="calorie-goal-missing-note" class="apple-caption">We need enough profile data to calculate your TDEE before we can save a goal.</p>
+                </div>
+                <ul id="calorie-goal-missing-list" class="calories-missing-list"></ul>
+                <button type="button"
+                        data-action="open-calorie-goal-setup"
+                        class="apple-btn apple-btn-primary apple-btn-block">
+                  Complete calorie setup
+                </button>
+              </div>
+
+              <div id="calorie-goal-preset-options" class="calorie-goal-preset-list"></div>
+            </section>
+          </div>
+        </div>
+
+        <p id="calorie-goal-error" class="apple-caption calories-setup-error" aria-live="polite"></p>
+      </div>
+
+      <div class="calorie-goal-footer">
+        <p id="calorie-goal-step-label" class="apple-caption">Step 1 of 2</p>
+        <div id="calorie-goal-step-dots" class="calorie-step-dots" role="tablist" aria-label="Calorie goal steps">
+          <button type="button" class="calorie-step-dot is-active" data-action="go-calorie-goal-step" data-step-index="0" aria-label="Go to goal step 1"></button>
+          <button type="button" class="calorie-step-dot" data-action="go-calorie-goal-step" data-step-index="1" aria-label="Go to goal step 2"></button>
+        </div>
+        <div class="calorie-goal-actions">
+          <button type="button"
+                  id="calorie-goal-back-btn"
+                  data-action="go-calorie-goal-back"
+                  class="apple-btn apple-btn-neutral hidden">
+            Back
+          </button>
+          <button type="button"
+                  id="calorie-goal-primary-btn"
+                  data-action="advance-calorie-goal"
+                  class="apple-btn apple-btn-primary">
+            Continue
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
