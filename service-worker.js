@@ -1,4 +1,4 @@
-var CACHE_NAME = "maxmode-v19";
+var CACHE_NAME = "maxmode-v21";
 
 var PRECACHE_URLS = [
   "/",
@@ -34,8 +34,7 @@ function isCacheableResponse(response) {
 }
 
 function isAvatarRequest(requestUrl) {
-  return requestUrl.origin === "https://api.dicebear.com"
-    && requestUrl.pathname.indexOf("/9.x/notionists/svg") === 0;
+  return isSameOrigin(requestUrl) && requestUrl.pathname === "/api/profile/picture";
 }
 
 function isCacheableAvatarResponse(response) {
@@ -87,7 +86,7 @@ self.addEventListener("fetch", function (event) {
 
   var url = new URL(request.url);
   var avatarRequest = isAvatarRequest(url);
-  if (!isSameOrigin(url) && !avatarRequest) return;
+  if (!isSameOrigin(url)) return;
 
   if (avatarRequest) {
     event.respondWith(

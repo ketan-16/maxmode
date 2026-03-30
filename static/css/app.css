@@ -4254,12 +4254,10 @@ html.no-view-transition .htmx-settling {
 .apple-segmented-btn.is-active {
   background: var(--apple-surface);
   color: var(--apple-label);
-  box-shadow: var(--apple-shadow-card);
 }
 
 .apple-segmented-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--apple-focus-ring);
 }
 
 .calorie-setup-form {

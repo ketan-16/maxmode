@@ -1,10 +1,14 @@
 import unittest
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
 from starlette.requests import Request
 from fastapi import HTTPException
 
 import main
+
+FEMALE_HAIR = ",".join(main.FEMALE_HAIR_VARIANTS)
+MALE_HAIR = ",".join(main.MALE_HAIR_VARIANTS)
 
 
 def make_request(path: str, hx: bool = False) -> Request:
@@ -91,6 +95,45 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="profile-ai-calculation-mode"', body)
         self.assertIn('id="profile-protein-multiplier-input"', body)
         self.assertIn('id="profile-protein-target-input"', body)
+
+    async def test_profile_picture_endpoint_returns_notionists_redirect(self):
+        response = await main.profile_picture(name="Alex", gender="female", size=128)
+        location = response.headers.get("location", "")
+        parsed = urlparse(location)
+        query = parse_qs(parsed.query)
+
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers.get("cache-control"), "public, max-age=86400, stale-while-revalidate=604800")
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "api.dicebear.com")
+        self.assertEqual(parsed.path, "/9.x/notionists/svg")
+        self.assertEqual(query["seed"], ["Alex"])
+        self.assertEqual(query["size"], ["128"])
+        self.assertEqual(query["beardProbability"], ["0"])
+        self.assertEqual(query["hair"], [FEMALE_HAIR])
+
+    async def test_profile_picture_endpoint_varies_by_gender(self):
+        male_location = (await main.profile_picture(name="Alex", gender="male", size=96)).headers.get("location", "")
+        female_location = (await main.profile_picture(name="Alex", gender="female", size=96)).headers.get("location", "")
+        male_query = parse_qs(urlparse(male_location).query)
+        female_query = parse_qs(urlparse(female_location).query)
+
+        self.assertEqual(male_query["seed"], ["Alex"])
+        self.assertEqual(female_query["seed"], ["Alex"])
+        self.assertEqual(male_query["beardProbability"], ["25"])
+        self.assertEqual(female_query["beardProbability"], ["0"])
+        self.assertEqual(male_query["hair"], [MALE_HAIR])
+        self.assertEqual(female_query["hair"], [FEMALE_HAIR])
+        self.assertNotEqual(male_location, female_location)
+
+    async def test_profile_picture_endpoint_normalizes_invalid_input(self):
+        response = await main.profile_picture(name=" ", gender="unknown", size=12)
+        query = parse_qs(urlparse(response.headers.get("location", "")).query)
+
+        self.assertEqual(query["seed"], ["MaxMode Member"])
+        self.assertEqual(query["size"], ["64"])
+        self.assertNotIn("beardProbability", query)
+        self.assertNotIn("hair", query)
 
     async def test_vary_header_for_hx_routes(self):
         for path, handler in (

@@ -23,6 +23,21 @@ let latestState = null;
 let activityModalCloseTimer = null;
 let pendingActivityLevel = "";
 
+function getAvatarGender(user) {
+  const profile = user && user.calorieProfile ? user.calorieProfile : null;
+  return profile && typeof profile.gender === "string" ? profile.gender : "";
+}
+
+function renderAvatarImage(elementId, user, size = 96) {
+  const img = document.getElementById(elementId);
+  if (!img || !user || !user.name) return;
+  img.src = avatarUrl(user.name, getAvatarGender(user), size);
+}
+
+function renderProfileAvatar(user) {
+  renderAvatarImage("profile-avatar", user, 144);
+}
+
 function isValidActivityLevel(activityLevel) {
   for (let i = 0; i < ACTIVITY_OPTIONS.length; i += 1) {
     if (ACTIVITY_OPTIONS[i].key === activityLevel) return true;
@@ -498,6 +513,8 @@ function persistProfileFields() {
   if (!patch) return;
 
   latestState = setCalorieProfile(patch);
+  renderNavAvatar(latestState.user);
+  renderProfileAvatar(latestState.user);
   renderActivityText(latestState.user && latestState.user.calorieProfile
     ? latestState.user.calorieProfile.activityLevel
     : null);
@@ -669,9 +686,7 @@ function bindProfileEvents() {
 }
 
 export function renderNavAvatar(user) {
-  const img = document.getElementById("nav-avatar");
-  if (!img || !user || !user.name) return;
-  img.src = avatarUrl(user.name);
+  renderAvatarImage("nav-avatar", user, 96);
 }
 
 export function handleEscape() {
@@ -690,8 +705,8 @@ export function render(state) {
 
   nameEl.textContent = user.name;
 
-  const avatarEl = document.getElementById("profile-avatar");
-  if (avatarEl) avatarEl.src = avatarUrl(user.name);
+  renderNavAvatar(user);
+  renderProfileAvatar(user);
 
   const sinceEl = document.getElementById("profile-since");
   if (sinceEl) sinceEl.textContent = `Member since ${formatDate(user.createdAt)}`;

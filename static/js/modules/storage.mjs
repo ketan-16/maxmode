@@ -575,6 +575,24 @@ export function clearAllData() {
   invalidateState();
 }
 
-export function avatarUrl(name) {
-  return `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}&size=96`;
+function normalizeAvatarGender(gender) {
+  if (gender === "male" || gender === "female") return gender;
+  return "neutral";
+}
+
+function normalizeAvatarSize(size) {
+  const parsed = (typeof size === "number") ? size : parseInt(size, 10);
+  if (!Number.isFinite(parsed)) return 96;
+  return Math.max(64, Math.min(256, Math.round(parsed)));
+}
+
+export function avatarUrl(name, gender, size = 96) {
+  const params = new URLSearchParams();
+  const trimmedName = (typeof name === "string" && name.trim()) ? name.trim() : "MaxMode Member";
+
+  params.set("name", trimmedName);
+  params.set("gender", normalizeAvatarGender(gender));
+  params.set("size", String(normalizeAvatarSize(size)));
+
+  return `/api/profile/picture?${params.toString()}`;
 }
