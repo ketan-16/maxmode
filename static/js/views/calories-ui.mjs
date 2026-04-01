@@ -26,11 +26,23 @@ import {
 } from "../modules/calories-utils.mjs";
 import { escapeHtml, formatTime, getHeightDisplay } from "../modules/data-utils.mjs";
 import {
+  applyGoalStepUiState,
+  buildGoalStepUiState,
+  nextGoalSelectionState
+} from "../modules/goal-flow.mjs";
+import {
   buildCalorieTrackerSummary,
   clampPortion,
   getLocalDayKey
 } from "../modules/meal-utils.mjs";
+import {
+  cssEscape,
+  getMaxTransitionMs,
+  onTransitionEndOrTimeout
+} from "../modules/motion-utils.mjs";
+import { createBodyScrollLock } from "../modules/scroll-lock.mjs";
 import { syncRangeInputVisual } from "../modules/slider-ui.mjs";
+import { initSwipeRows } from "../modules/swipe-row.mjs";
 
 const STEP_COUNT = 3;
 const GOAL_STEP_COUNT = 2;
@@ -39,6 +51,7 @@ const OVERLAY_CLOSE_MS = 220;
 const TOAST_VISIBLE_MS = 2400;
 const FAB_LONG_PRESS_MS = 420;
 const MAX_MANUAL_PHOTOS = 3;
+const MAX_ANALYSIS_IMAGE_BYTES = 4 * 1024 * 1024;
 const RECENT_FOOD_NAME_LIMIT = 28;
 const MEAL_SWIPE_CONFIG = {
   SNAP_PX: 52,
@@ -104,10 +117,6 @@ let openMealMenuId = null;
 let lastCaloriesUiMode = null;
 let resizeFrame = null;
 let deleteSheetTransitionCleanup = null;
-let calorieOverlayScrollLocked = false;
-let calorieOverlayScrollY = 0;
-let calorieOverlayUnlockTimer = null;
-let calorieOverlayViewportCleanup = null;
 
 function parseNumber(value) {
   const parsed = (typeof value === "number") ? value : parseFloat(value);
@@ -162,6 +171,20 @@ function createManualPhotoId() {
   return `photo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function validateAnalysisImageFile(file) {
+  if (!file) return "Choose an image to continue.";
+
+  if (!String(file.type || "").startsWith("image/")) {
+    return "Only image uploads are supported.";
+  }
+
+  if (typeof file.size === "number" && file.size > MAX_ANALYSIS_IMAGE_BYTES) {
+    return "Each image must be 4 MB or smaller.";
+  }
+
+  return "";
+}
+
 function formatMacroProgress(current, target) {
   return `${formatCalories(current)}/${formatCalories(target)}g`;
 }
@@ -186,88 +209,6 @@ function clearTimer(timer) {
   }
 }
 
-function cssEscape(value) {
-  if (window.CSS && typeof window.CSS.escape === "function") {
-    return window.CSS.escape(value);
-  }
-  return String(value).replace(/([\\\"'])/g, "\\$1");
-}
-
-function parseCssTimeMs(rawValue) {
-  if (!rawValue) return 0;
-
-  const value = String(rawValue).trim();
-  if (!value) return 0;
-
-  if (value.slice(-2) === "ms") {
-    const millis = parseFloat(value.slice(0, -2));
-    return Number.isFinite(millis) ? millis : 0;
-  }
-
-  if (value.slice(-1) === "s") {
-    const seconds = parseFloat(value.slice(0, -1));
-    return Number.isFinite(seconds) ? seconds * 1000 : 0;
-  }
-
-  return 0;
-}
-
-function getMaxTransitionMs(element) {
-  if (!element) return 0;
-
-  const style = window.getComputedStyle(element);
-  const durations = String(style.transitionDuration || "").split(",");
-  const delays = String(style.transitionDelay || "").split(",");
-  const total = Math.max(durations.length, delays.length);
-  let maxMs = 0;
-
-  for (let i = 0; i < total; i += 1) {
-    const duration = parseCssTimeMs(durations[i % durations.length]);
-    const delay = parseCssTimeMs(delays[i % delays.length]);
-    if ((duration + delay) > maxMs) {
-      maxMs = duration + delay;
-    }
-  }
-
-  return maxMs;
-}
-
-function onTransitionEndOrTimeout(element, fallbackMs, callback) {
-  if (!element || typeof callback !== "function") {
-    return () => {};
-  }
-
-  let done = false;
-  let timer = null;
-
-  function finish() {
-    if (done) return;
-    done = true;
-    if (timer !== null) {
-      window.clearTimeout(timer);
-    }
-    element.removeEventListener("transitionend", onEnd);
-    callback();
-  }
-
-  function onEnd(event) {
-    if (event.target !== element) return;
-    finish();
-  }
-
-  element.addEventListener("transitionend", onEnd);
-  timer = window.setTimeout(finish, Math.max(24, Math.ceil(fallbackMs)));
-
-  return function cleanup() {
-    if (done) return;
-    done = true;
-    if (timer !== null) {
-      window.clearTimeout(timer);
-    }
-    element.removeEventListener("transitionend", onEnd);
-  };
-}
-
 function setDeleteSheetOpenState(isOpen) {
   if (!document.body) return;
   document.body.classList.toggle("is-delete-sheet-open", !!isOpen);
@@ -279,84 +220,6 @@ function clearDeleteSheetTransitionWatcher() {
     deleteSheetTransitionCleanup = null;
     cleanup();
   }
-}
-
-function clearCalorieOverlayUnlockWaiters() {
-  if (calorieOverlayUnlockTimer !== null) {
-    window.clearTimeout(calorieOverlayUnlockTimer);
-    calorieOverlayUnlockTimer = null;
-  }
-
-  if (typeof calorieOverlayViewportCleanup === "function") {
-    const cleanup = calorieOverlayViewportCleanup;
-    calorieOverlayViewportCleanup = null;
-    cleanup();
-  }
-}
-
-function lockCalorieOverlayScroll() {
-  clearCalorieOverlayUnlockWaiters();
-  if (calorieOverlayScrollLocked || !document.body) return;
-
-  calorieOverlayScrollY = window.scrollY || window.pageYOffset || 0;
-  document.body.classList.add("modal-scroll-locked");
-  document.body.style.top = `-${calorieOverlayScrollY}px`;
-  calorieOverlayScrollLocked = true;
-}
-
-function unlockCalorieOverlayScrollNow() {
-  clearCalorieOverlayUnlockWaiters();
-  if (!calorieOverlayScrollLocked || !document.body) return;
-
-  const restoreY = calorieOverlayScrollY;
-  document.body.classList.remove("modal-scroll-locked");
-  document.body.style.top = "";
-  window.scrollTo(0, restoreY);
-  requestAnimationFrame(() => {
-    window.scrollTo(0, restoreY);
-  });
-
-  calorieOverlayScrollLocked = false;
-}
-
-function unlockCalorieOverlayScrollAfterKeyboard() {
-  clearCalorieOverlayUnlockWaiters();
-  if (!calorieOverlayScrollLocked) return;
-
-  if (window.visualViewport && isMobileCaloriesUI()) {
-    const viewport = window.visualViewport;
-    const deadlineTs = Date.now() + 420;
-
-    function finalizeUnlock() {
-      unlockCalorieOverlayScrollNow();
-    }
-
-    function queueUnlock() {
-      if (calorieOverlayUnlockTimer !== null) {
-        window.clearTimeout(calorieOverlayUnlockTimer);
-      }
-
-      const msLeft = deadlineTs - Date.now();
-      const delay = msLeft <= 0 ? 0 : Math.min(120, msLeft);
-      calorieOverlayUnlockTimer = window.setTimeout(finalizeUnlock, delay);
-    }
-
-    function onViewportChange() {
-      queueUnlock();
-    }
-
-    viewport.addEventListener("resize", onViewportChange);
-    viewport.addEventListener("scroll", onViewportChange);
-    calorieOverlayViewportCleanup = () => {
-      viewport.removeEventListener("resize", onViewportChange);
-      viewport.removeEventListener("scroll", onViewportChange);
-    };
-
-    queueUnlock();
-    return;
-  }
-
-  unlockCalorieOverlayScrollNow();
 }
 
 function hasVisibleCalorieOverlay() {
@@ -388,11 +251,11 @@ function syncCalorieOverlayUiState() {
 
   if (isOpen) {
     closeFabMenu();
-    lockCalorieOverlayScroll();
+    calorieOverlayScrollLock.lock();
     return;
   }
 
-  unlockCalorieOverlayScrollAfterKeyboard();
+  calorieOverlayScrollLock.unlockAfterKeyboard();
 }
 
 function isMobileCaloriesUI() {
@@ -406,6 +269,10 @@ function isMobileCaloriesUI() {
 
   return window.matchMedia("(max-width: 1024px)").matches || /Android|iPhone|iPod|Mobile|Tablet/i.test(ua);
 }
+
+const calorieOverlayScrollLock = createBodyScrollLock({
+  isMobileUi: isMobileCaloriesUI
+});
 
 function closeOpenMealSwipeRow() {
   if (openMealSwipeRow && typeof openMealSwipeRow._close === "function") {
@@ -822,9 +689,14 @@ function addManualPhotos(fileList) {
   if (!files.length) return;
 
   let hitLimit = false;
+  let validationMessage = "";
   for (let i = 0; i < files.length; i += 1) {
     const file = files[i];
-    if (!file || !String(file.type || "").startsWith("image/")) continue;
+    const fileError = validateAnalysisImageFile(file);
+    if (fileError) {
+      if (!validationMessage) validationMessage = fileError;
+      continue;
+    }
 
     if (manualPhotoFiles.length >= MAX_MANUAL_PHOTOS) {
       hitLimit = true;
@@ -846,6 +718,11 @@ function addManualPhotos(fileList) {
 
   if (hitLimit) {
     showToast("You can add up to 3 photos.");
+    return;
+  }
+
+  if (validationMessage) {
+    showToast(validationMessage);
   }
 }
 
@@ -1117,16 +994,34 @@ function buildMergedRecentFoods(summary) {
   return merged;
 }
 
+function buildRecentFoodsRenderKey(foods) {
+  if (!Array.isArray(foods) || foods.length === 0) return "empty";
+
+  const parts = [String(foods.length)];
+  for (let i = 0; i < foods.length; i += 1) {
+    const item = foods[i];
+    parts.push(String(item.id || ""));
+    parts.push(String(item.name || ""));
+    parts.push(String(item.calories || 0));
+  }
+  return parts.join("|");
+}
+
 function renderRecentFoods(summary) {
   const container = document.getElementById("calorie-recent-foods");
   if (!container) return;
 
   const mergedFoods = buildMergedRecentFoods(summary);
+  const nextKey = buildRecentFoodsRenderKey(mergedFoods);
 
   if (mergedFoods.length === 0) {
+    if (container.dataset.renderKey === nextKey) return;
     container.innerHTML = '<p class="apple-caption calories-recent-empty">Recent and frequent foods will appear here after your first meal.</p>';
+    container.dataset.renderKey = nextKey;
     return;
   }
+
+  if (container.dataset.renderKey === nextKey) return;
 
   const markup = [];
   for (let i = 0; i < mergedFoods.length; i += 1) {
@@ -1144,6 +1039,7 @@ function renderRecentFoods(summary) {
   }
 
   container.innerHTML = markup.join("");
+  container.dataset.renderKey = nextKey;
 }
 
 function renderMacroChip(label, value, tone) {
@@ -1366,7 +1262,12 @@ function renderFeed(summary) {
 
   if (meals.length === 0) {
     emptyState.classList.remove("hidden");
+    if (list.dataset.renderKey === "empty") {
+      closeMealDeleteSheet();
+      return;
+    }
     list.innerHTML = "";
+    list.dataset.renderKey = "empty";
     closeMealDeleteSheet();
     return;
   }
@@ -1374,12 +1275,28 @@ function renderFeed(summary) {
   emptyState.classList.add("hidden");
 
   const groups = buildMealFeedGroups(meals);
+  const renderKeyParts = [useMobileUi ? "mobile" : "desktop", String(groups.length)];
+  for (let i = 0; i < groups.length; i += 1) {
+    const group = groups[i];
+    renderKeyParts.push(String(group.key || ""));
+    renderKeyParts.push(String(group.entries.length || 0));
+    for (let j = 0; j < group.entries.length; j += 1) {
+      const meal = group.entries[j];
+      renderKeyParts.push(String(meal.id || ""));
+      renderKeyParts.push(String(meal.loggedAt || ""));
+      renderKeyParts.push(String(meal.portion || 1));
+    }
+  }
+  const nextKey = renderKeyParts.join("|");
+  if (list.dataset.renderKey === nextKey) return;
+
   const markup = new Array(groups.length);
   for (let i = 0; i < groups.length; i += 1) {
     markup[i] = mealGroupHtml(groups[i], useMobileUi);
   }
 
   list.innerHTML = markup.join("");
+  list.dataset.renderKey = nextKey;
 
   if (useMobileUi) {
     initMealSwipeRows(list);
@@ -1713,26 +1630,24 @@ function syncGoalStepUi(state) {
 
   if (!track || !label || !backBtn || !primaryBtn) return;
 
-  track.style.transform = `translateX(-${goalCurrentStep * 100}%)`;
-  label.textContent = `Step ${goalCurrentStep + 1} of ${GOAL_STEP_COUNT}`;
-
   const hasObjective = isValidGoalObjective(selectedGoalObjective);
   const hasMaintenance = resolveCalorieGoalFromState(state).maintenanceCalories !== null;
   const selectedPreset = getSelectedGoalPreset();
+  const uiState = buildGoalStepUiState({
+    currentStep: goalCurrentStep,
+    stepCount: GOAL_STEP_COUNT,
+    hasObjective,
+    hasMaintenance,
+    hasPreset: !!selectedPreset
+  });
 
-  for (let i = 0; i < dots.length; i += 1) {
-    const isActive = i === goalCurrentStep;
-    const isDisabled = i > 0 && !hasObjective;
-    dots[i].classList.toggle("is-active", isActive);
-    dots[i].classList.toggle("is-disabled", isDisabled);
-    dots[i].disabled = isDisabled;
-  }
-
-  backBtn.classList.toggle("hidden", goalCurrentStep === 0);
-  primaryBtn.textContent = goalCurrentStep === 0 ? "Continue" : "Save goal";
-  primaryBtn.disabled = goalCurrentStep === 0
-    ? !hasObjective
-    : !(hasMaintenance && selectedPreset);
+  applyGoalStepUiState({
+    track,
+    label,
+    dots: Array.from(dots),
+    backButton: backBtn,
+    primaryButton: primaryBtn
+  }, uiState);
 }
 
 function renderGoalModalState(state) {
@@ -1765,13 +1680,14 @@ function closeGoalModal() {
 function selectGoalObjective(objective) {
   if (!isValidGoalObjective(objective)) return;
 
-  selectedGoalObjective = objective;
-  const currentPreset = getCalorieGoalPreset(selectedGoalPresetKey);
-  if (objective === "maintain") {
-    selectedGoalPresetKey = "maintain";
-  } else if (!currentPreset || currentPreset.objective !== objective) {
-    selectedGoalPresetKey = "";
-  }
+  const nextState = nextGoalSelectionState(
+    selectedGoalObjective,
+    selectedGoalPresetKey,
+    objective,
+    getCalorieGoalPreset
+  );
+  selectedGoalObjective = nextState.selectedObjective;
+  selectedGoalPresetKey = nextState.selectedPresetKey;
 
   setGoalError("");
   renderGoalModalState(latestState || loadState());
@@ -1857,10 +1773,15 @@ async function requestMealEstimate({ mode, note, files }) {
   formData.set("goal_objective", goalObjective);
   formData.set("ai_calculation_mode", aiCalculationMode);
   const imageFiles = Array.isArray(files) ? files : [];
+  if (imageFiles.length > MAX_MANUAL_PHOTOS) {
+    throw new Error("You can upload up to 3 images per meal.");
+  }
   for (let i = 0; i < imageFiles.length; i += 1) {
-    if (imageFiles[i]) {
-      formData.append("images", imageFiles[i]);
+    const fileError = validateAnalysisImageFile(imageFiles[i]);
+    if (fileError) {
+      throw new Error(fileError);
     }
+    formData.append("images", imageFiles[i]);
   }
 
   let response;
@@ -1897,6 +1818,11 @@ async function requestMealEstimate({ mode, note, files }) {
 
 async function handleScanFile(file) {
   if (!file) return;
+  const fileError = validateAnalysisImageFile(file);
+  if (fileError) {
+    showToast(fileError);
+    return;
+  }
 
   openPreviewLoading("scan");
   setPreviewError("");
@@ -2126,280 +2052,29 @@ function bindFabGesture() {
   primary.addEventListener("pointercancel", clearPress);
 }
 
-function initMealSwipeRow(row) {
-  if (!row || row.dataset.swipeBound === "1") return;
-  row.dataset.swipeBound = "1";
-
-  const content = row.querySelector(".meal-row-content");
-  const actions = row.querySelector(".meal-pill-actions");
-  if (!content || !actions) return;
-
-  const buttons = Array.prototype.slice.call(actions.querySelectorAll(".meal-pill-btn"));
-  const deleteButton = row.querySelector(".meal-pill-btn.delete");
-  const openPx = measureOpenPx();
-  row._openPx = openPx;
-
-  let startX = 0;
-  let startY = 0;
-  let baseX = 0;
-  let curX = 0;
-  let lastMoveX = 0;
-  let lastMoveTime = 0;
-  let velocityX = 0;
-  let dragging = false;
-  let locked = false;
-  let queuedX = 0;
-  let translateFrame = null;
-  let willChangeTimer = null;
-  let actionsHideTimer = null;
-
-  function measureOpenPx() {
-    if (!buttons.length) return 0;
-
-    const actionsStyle = window.getComputedStyle(actions);
-    let gap = parseFloat(actionsStyle.columnGap || actionsStyle.gap || "0");
-    let rightInset = parseFloat(actionsStyle.right || "0");
-    if (!Number.isFinite(gap)) gap = 0;
-    if (!Number.isFinite(rightInset)) rightInset = 0;
-
-    let actionWidth = 0;
-    for (let i = 0; i < buttons.length; i += 1) {
-      let layoutWidth = buttons[i].offsetWidth;
-      if (!layoutWidth) {
-        const btnStyle = window.getComputedStyle(buttons[i]);
-        layoutWidth = parseFloat(btnStyle.width || "0");
-      }
-      actionWidth += layoutWidth;
-    }
-    actionWidth += Math.max(0, buttons.length - 1) * gap;
-
-    return Math.max(
-      MEAL_SWIPE_CONFIG.MIN_OPEN_PX,
-      Math.ceil(actionWidth + rightInset + MEAL_SWIPE_CONFIG.OPEN_EXTRA_PX)
-    );
-  }
-
-  function clearWillChangeSoon() {
-    if (willChangeTimer !== null) {
-      window.clearTimeout(willChangeTimer);
-    }
-
-    const delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
-    willChangeTimer = window.setTimeout(() => {
-      willChangeTimer = null;
-      if (!dragging) {
-        content.style.willChange = "";
-      }
-    }, delay);
-  }
-
-  function clearActionsHideSoon() {
-    if (actionsHideTimer !== null) {
-      window.clearTimeout(actionsHideTimer);
-      actionsHideTimer = null;
-    }
-  }
-
-  function cancelTranslateFrame() {
-    if (translateFrame !== null) {
-      window.cancelAnimationFrame(translateFrame);
-      translateFrame = null;
-    }
-  }
-
-  function toggleDeleteExpansion(x) {
-    if (!deleteButton) return;
-    if (x < -(window.innerWidth * MEAL_SWIPE_CONFIG.FULL_FRAC)) {
-      deleteButton.classList.add("expanding");
-    } else {
-      deleteButton.classList.remove("expanding");
-    }
-  }
-
-  function toggleButtons(progress) {
-    for (let i = 0; i < buttons.length; i += 1) {
-      if (progress > (0.08 + i * 0.12)) {
-        buttons[i].classList.add("show");
-      } else {
-        buttons[i].classList.remove("show");
-      }
-    }
-  }
-
-  function applyTranslate(x, animate) {
-    content.style.transition = animate
-      ? "transform var(--motion-duration-snap) var(--motion-ease-emphasized)"
-      : "none";
-    content.style.transform = `translate3d(${x}px, 0, 0)`;
-
-    if (x < -4) {
-      actions.classList.add("visible");
-      toggleButtons(Math.min(1, Math.abs(x) / Math.max(openPx, 1)));
-    } else if (Math.abs(x) < 8) {
-      actions.classList.remove("visible");
-      toggleButtons(0);
-    }
-  }
-
-  function scheduleTranslate(x) {
-    queuedX = x;
-    if (translateFrame !== null) return;
-
-    translateFrame = requestAnimationFrame(() => {
-      translateFrame = null;
-      applyTranslate(queuedX, false);
-      toggleDeleteExpansion(queuedX);
-    });
-  }
-
-  function flushTranslateFrame() {
-    if (translateFrame === null) return;
-    window.cancelAnimationFrame(translateFrame);
-    translateFrame = null;
-    applyTranslate(queuedX, false);
-    toggleDeleteExpansion(queuedX);
-  }
-
-  function snapTo(x) {
-    cancelTranslateFrame();
-    clearActionsHideSoon();
-    curX = x;
-    queuedX = x;
-    applyTranslate(x, true);
-    toggleDeleteExpansion(x);
-
-    if (x < 0) {
-      row.classList.add("is-open");
-    } else {
-      row.classList.remove("is-open");
-    }
-
-    if (x === 0) {
-      const delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
-      actionsHideTimer = window.setTimeout(() => {
-        actionsHideTimer = null;
-        actions.classList.remove("visible");
-        toggleButtons(0);
-      }, delay);
-    }
-
-    clearWillChangeSoon();
-  }
-
-  function closeRow() {
-    snapTo(0);
-    if (openMealSwipeRow === row) openMealSwipeRow = null;
-  }
-
-  function onStart(event) {
-    if (!event.touches || event.touches.length !== 1) return;
-
-    if (openMealSwipeRow && openMealSwipeRow !== row) {
-      closeOpenMealSwipeRow();
-    }
-
-    startX = event.touches[0].clientX;
-    startY = event.touches[0].clientY;
-    baseX = curX;
-    lastMoveX = startX;
-    lastMoveTime = Date.now();
-    velocityX = 0;
-    dragging = true;
-    locked = false;
-    cancelTranslateFrame();
-    clearActionsHideSoon();
-    if (willChangeTimer !== null) {
-      window.clearTimeout(willChangeTimer);
-      willChangeTimer = null;
-    }
-    content.style.willChange = "transform";
-    content.style.transition = "none";
-  }
-
-  function onMove(event) {
-    if (!dragging || !event.touches || event.touches.length !== 1) return;
-
-    const x = event.touches[0].clientX;
-    const y = event.touches[0].clientY;
-    const dx = x - startX;
-    const dy = y - startY;
-
-    if (!locked) {
-      if (Math.hypot(dx, dy) < 5) return;
-      if (Math.abs(dy) > Math.abs(dx)) {
-        dragging = false;
-        content.style.willChange = "";
-        return;
-      }
-      locked = true;
-    }
-
-    if (event.cancelable) event.preventDefault();
-
-    let raw = baseX + dx;
-    const now = Date.now();
-    const dt = now - lastMoveTime;
-    if (dt > 0) {
-      velocityX = (x - lastMoveX) / dt;
-    }
-    lastMoveX = x;
-    lastMoveTime = now;
-
-    if (raw > 0) {
-      raw *= 0.2;
-    }
-
-    if (raw < -openPx) {
-      raw = -openPx + (raw + openPx) * MEAL_SWIPE_CONFIG.DAMP;
-    }
-
-    curX = raw;
-    scheduleTranslate(raw);
-  }
-
-  function onEnd() {
-    if (!dragging) return;
-    dragging = false;
-
-    flushTranslateFrame();
-
-    if (deleteButton) deleteButton.classList.remove("expanding");
-
-    if (curX < -(window.innerWidth * MEAL_SWIPE_CONFIG.FULL_FRAC)) {
-      closeRow();
-      if (navigator.vibrate) navigator.vibrate(10);
-      openMealDeleteSheet(row.getAttribute("data-meal-id"));
-      return;
-    }
-
-    if ((Math.abs(curX) > MEAL_SWIPE_CONFIG.SNAP_PX || velocityX < MEAL_SWIPE_CONFIG.FLICK_VELOCITY) && buttons.length > 0) {
-      snapTo(-(row._openPx || openPx));
+function initMealSwipeRows(list) {
+  initSwipeRows(list, {
+    rowSelector: ".meal-swipe-row",
+    contentSelector: ".meal-row-content",
+    actionsSelector: ".meal-pill-actions",
+    buttonSelector: ".meal-pill-btn",
+    deleteButtonSelector: ".meal-pill-btn.delete",
+    config: MEAL_SWIPE_CONFIG,
+    revealThresholdBase: 0.08,
+    revealThresholdStep: 0.12,
+    getOpenRow() {
+      return openMealSwipeRow;
+    },
+    setOpenRow(row) {
       openMealSwipeRow = row;
-      row._close = closeRow;
-    } else {
-      closeRow();
-    }
-  }
-
-  content.addEventListener("touchstart", onStart, { passive: true });
-  content.addEventListener("touchmove", onMove, { passive: false });
-  content.addEventListener("touchend", onEnd);
-  content.addEventListener("touchcancel", onEnd);
-  content.addEventListener("click", () => {
-    if (openMealSwipeRow === row) {
-      closeRow();
+    },
+    getDeleteId(row) {
+      return row.getAttribute("data-meal-id");
+    },
+    onDelete(mealId) {
+      openMealDeleteSheet(mealId);
     }
   });
-
-  row._close = closeRow;
-}
-
-function initMealSwipeRows(list) {
-  if (!list) return;
-  const rows = list.querySelectorAll(".meal-swipe-row");
-  for (let i = 0; i < rows.length; i += 1) {
-    initMealSwipeRow(rows[i]);
-  }
 }
 
 function startVoiceEntry() {
@@ -3348,7 +3023,6 @@ export function resetViewUiState() {
   }
   clearToastTimers();
   clearDeleteSheetTransitionWatcher();
-  clearCalorieOverlayUnlockWaiters();
   stopVoiceRecognition();
 
   hideVoiceStatus();
@@ -3371,7 +3045,7 @@ export function resetViewUiState() {
   hideOverlayImmediately("calorie-preview-modal");
   hideOverlayImmediately("calorie-goal-modal");
   hideOverlayImmediately("calorie-setup-modal");
-  unlockCalorieOverlayScrollNow();
+  calorieOverlayScrollLock.unlockNow();
 }
 
 export function render(state) {

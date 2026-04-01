@@ -23,6 +23,13 @@ import {
   renderWeightsTrendChart
 } from "../modules/charts.mjs";
 import {
+  cssEscape,
+  getMaxTransitionMs,
+  onTransitionEndOrTimeout
+} from "../modules/motion-utils.mjs";
+import { createBodyScrollLock } from "../modules/scroll-lock.mjs";
+import { initSwipeRows } from "../modules/swipe-row.mjs";
+import {
   kgToLb,
   resolveCalorieGoalFromState
 } from "../modules/calories-utils.mjs";
@@ -48,10 +55,6 @@ let openSwipeRow = null;
 let openDesktopMenuId = null;
 let lastWeightUiMode = null;
 let resizeFrame = null;
-let weightModalScrollY = 0;
-let weightModalScrollLocked = false;
-let weightModalUnlockTimer = null;
-let weightModalViewportCleanup = null;
 let weightModalTransitionCleanup = null;
 let deleteSheetTransitionCleanup = null;
 let latestState = null;
@@ -67,88 +70,6 @@ export function setRequestRender(fn) {
 function setDeleteSheetOpenState(isOpen) {
   if (!document.body) return;
   document.body.classList.toggle("is-delete-sheet-open", !!isOpen);
-}
-
-function cssEscape(value) {
-  if (window.CSS && typeof window.CSS.escape === "function") {
-    return window.CSS.escape(value);
-  }
-  return String(value).replace(/([\\"'])/g, "\\$1");
-}
-
-function parseCssTimeMs(rawValue) {
-  if (!rawValue) return 0;
-
-  const value = String(rawValue).trim();
-  if (!value) return 0;
-
-  if (value.slice(-2) === "ms") {
-    const millis = parseFloat(value.slice(0, -2));
-    return Number.isFinite(millis) ? millis : 0;
-  }
-
-  if (value.slice(-1) === "s") {
-    const seconds = parseFloat(value.slice(0, -1));
-    return Number.isFinite(seconds) ? seconds * 1000 : 0;
-  }
-
-  return 0;
-}
-
-function getMaxTransitionMs(element) {
-  if (!element) return 0;
-
-  const style = window.getComputedStyle(element);
-  const durations = String(style.transitionDuration || "").split(",");
-  const delays = String(style.transitionDelay || "").split(",");
-  const total = Math.max(durations.length, delays.length);
-  let maxMs = 0;
-
-  for (let i = 0; i < total; i += 1) {
-    const duration = parseCssTimeMs(durations[i % durations.length]);
-    const delay = parseCssTimeMs(delays[i % delays.length]);
-    if ((duration + delay) > maxMs) {
-      maxMs = duration + delay;
-    }
-  }
-
-  return maxMs;
-}
-
-function onTransitionEndOrTimeout(element, fallbackMs, callback) {
-  if (!element || typeof callback !== "function") {
-    return () => {};
-  }
-
-  let done = false;
-  let timer = null;
-
-  function finish() {
-    if (done) return;
-    done = true;
-    if (timer !== null) {
-      window.clearTimeout(timer);
-    }
-    element.removeEventListener("transitionend", onEnd);
-    callback();
-  }
-
-  function onEnd(e) {
-    if (e.target !== element) return;
-    finish();
-  }
-
-  element.addEventListener("transitionend", onEnd);
-  timer = window.setTimeout(finish, Math.max(24, Math.ceil(fallbackMs)));
-
-  return function cleanup() {
-    if (done) return;
-    done = true;
-    if (timer !== null) {
-      window.clearTimeout(timer);
-    }
-    element.removeEventListener("transitionend", onEnd);
-  };
 }
 
 function clearWeightModalTransitionWatcher() {
@@ -179,83 +100,9 @@ function isMobileWeightUI() {
   return window.matchMedia("(max-width: 1024px)").matches || /Android|iPhone|iPod|Mobile|Tablet/i.test(ua);
 }
 
-function clearWeightModalUnlockWaiters() {
-  if (weightModalUnlockTimer !== null) {
-    window.clearTimeout(weightModalUnlockTimer);
-    weightModalUnlockTimer = null;
-  }
-
-  if (typeof weightModalViewportCleanup === "function") {
-    const cleanup = weightModalViewportCleanup;
-    weightModalViewportCleanup = null;
-    cleanup();
-  }
-}
-
-function lockWeightModalScroll() {
-  clearWeightModalUnlockWaiters();
-  if (weightModalScrollLocked) return;
-
-  weightModalScrollY = window.scrollY || window.pageYOffset || 0;
-  document.body.classList.add("modal-scroll-locked");
-  document.body.style.top = `-${weightModalScrollY}px`;
-  weightModalScrollLocked = true;
-}
-
-function unlockWeightModalScrollNow() {
-  clearWeightModalUnlockWaiters();
-  if (!weightModalScrollLocked) return;
-
-  const restoreY = weightModalScrollY;
-  document.body.classList.remove("modal-scroll-locked");
-  document.body.style.top = "";
-  window.scrollTo(0, restoreY);
-  requestAnimationFrame(() => {
-    window.scrollTo(0, restoreY);
-  });
-
-  weightModalScrollLocked = false;
-}
-
-function unlockWeightModalScrollAfterKeyboard() {
-  clearWeightModalUnlockWaiters();
-  if (!weightModalScrollLocked) return;
-
-  if (window.visualViewport && isMobileWeightUI()) {
-    const viewport = window.visualViewport;
-    const deadlineTs = Date.now() + 420;
-
-    function finalizeUnlock() {
-      unlockWeightModalScrollNow();
-    }
-
-    function queueUnlock() {
-      if (weightModalUnlockTimer !== null) {
-        window.clearTimeout(weightModalUnlockTimer);
-      }
-
-      const msLeft = deadlineTs - Date.now();
-      const delay = msLeft <= 0 ? 0 : Math.min(120, msLeft);
-      weightModalUnlockTimer = window.setTimeout(finalizeUnlock, delay);
-    }
-
-    function onViewportChange() {
-      queueUnlock();
-    }
-
-    viewport.addEventListener("resize", onViewportChange);
-    viewport.addEventListener("scroll", onViewportChange);
-    weightModalViewportCleanup = () => {
-      viewport.removeEventListener("resize", onViewportChange);
-      viewport.removeEventListener("scroll", onViewportChange);
-    };
-
-    queueUnlock();
-    return;
-  }
-
-  unlockWeightModalScrollNow();
-}
+const weightModalScrollLock = createBodyScrollLock({
+  isMobileUi: isMobileWeightUI
+});
 
 function focusWeightInput(input, selectValue) {
   if (!input) return;
@@ -515,280 +362,29 @@ function renderMobileWeightGroups(groups, container) {
   container.innerHTML = markup.join("");
 }
 
-function initWeightSwipeRow(row) {
-  if (!row || row.dataset.swipeBound === "1") return;
-  row.dataset.swipeBound = "1";
-
-  const content = row.querySelector(".weight-row-content");
-  const actions = row.querySelector(".weight-pill-actions");
-  if (!content || !actions) return;
-
-  const buttons = Array.prototype.slice.call(actions.querySelectorAll(".weight-pill-btn"));
-  const deleteButton = row.querySelector(".weight-pill-btn.delete");
-  const openPx = measureOpenPx();
-  row._openPx = openPx;
-
-  let startX = 0;
-  let startY = 0;
-  let baseX = 0;
-  let curX = 0;
-  let lastMoveX = 0;
-  let lastMoveTime = 0;
-  let velocityX = 0;
-  let dragging = false;
-  let locked = false;
-  let queuedX = 0;
-  let translateFrame = null;
-  let willChangeTimer = null;
-  let actionsHideTimer = null;
-
-  function measureOpenPx() {
-    if (!buttons.length) return 0;
-
-    const actionsStyle = window.getComputedStyle(actions);
-    let gap = parseFloat(actionsStyle.columnGap || actionsStyle.gap || "0");
-    let rightInset = parseFloat(actionsStyle.right || "0");
-    if (!Number.isFinite(gap)) gap = 0;
-    if (!Number.isFinite(rightInset)) rightInset = 0;
-
-    let actionWidth = 0;
-    for (let i = 0; i < buttons.length; i += 1) {
-      let layoutWidth = buttons[i].offsetWidth;
-      if (!layoutWidth) {
-        const btnStyle = window.getComputedStyle(buttons[i]);
-        layoutWidth = parseFloat(btnStyle.width || "0");
-      }
-      actionWidth += layoutWidth;
-    }
-    actionWidth += Math.max(0, buttons.length - 1) * gap;
-
-    return Math.max(
-      SWIPE_CONFIG.MIN_OPEN_PX,
-      Math.ceil(actionWidth + rightInset + SWIPE_CONFIG.OPEN_EXTRA_PX)
-    );
-  }
-
-  function clearWillChangeSoon() {
-    if (willChangeTimer !== null) {
-      window.clearTimeout(willChangeTimer);
-    }
-
-    const delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
-    willChangeTimer = window.setTimeout(() => {
-      willChangeTimer = null;
-      if (!dragging) {
-        content.style.willChange = "";
-      }
-    }, delay);
-  }
-
-  function clearActionsHideSoon() {
-    if (actionsHideTimer !== null) {
-      window.clearTimeout(actionsHideTimer);
-      actionsHideTimer = null;
-    }
-  }
-
-  function cancelTranslateFrame() {
-    if (translateFrame !== null) {
-      window.cancelAnimationFrame(translateFrame);
-      translateFrame = null;
-    }
-  }
-
-  function toggleDeleteExpansion(x) {
-    if (!deleteButton) return;
-    if (x < -(window.innerWidth * SWIPE_CONFIG.FULL_FRAC)) {
-      deleteButton.classList.add("expanding");
-    } else {
-      deleteButton.classList.remove("expanding");
-    }
-  }
-
-  function toggleButtons(progress) {
-    for (let i = 0; i < buttons.length; i += 1) {
-      if (progress > (0.08 + i * 0.14)) {
-        buttons[i].classList.add("show");
-      } else {
-        buttons[i].classList.remove("show");
-      }
-    }
-  }
-
-  function applyTranslate(x, animate) {
-    content.style.transition = animate
-      ? "transform var(--motion-duration-snap) var(--motion-ease-emphasized)"
-      : "none";
-    content.style.transform = `translate3d(${x}px, 0, 0)`;
-
-    if (x < -4) {
-      actions.classList.add("visible");
-      toggleButtons(Math.min(1, Math.abs(x) / Math.max(openPx, 1)));
-    } else if (Math.abs(x) < 8) {
-      actions.classList.remove("visible");
-      toggleButtons(0);
-    }
-  }
-
-  function scheduleTranslate(x) {
-    queuedX = x;
-    if (translateFrame !== null) return;
-
-    translateFrame = requestAnimationFrame(() => {
-      translateFrame = null;
-      applyTranslate(queuedX, false);
-      toggleDeleteExpansion(queuedX);
-    });
-  }
-
-  function flushTranslateFrame() {
-    if (translateFrame === null) return;
-    window.cancelAnimationFrame(translateFrame);
-    translateFrame = null;
-    applyTranslate(queuedX, false);
-    toggleDeleteExpansion(queuedX);
-  }
-
-  function snapTo(x) {
-    cancelTranslateFrame();
-    clearActionsHideSoon();
-    curX = x;
-    queuedX = x;
-    applyTranslate(x, true);
-    toggleDeleteExpansion(x);
-
-    if (x < 0) {
-      row.classList.add("is-open");
-    } else {
-      row.classList.remove("is-open");
-    }
-
-    if (x === 0) {
-      const delay = Math.max(90, Math.round(getMaxTransitionMs(content)));
-      actionsHideTimer = window.setTimeout(() => {
-        actionsHideTimer = null;
-        actions.classList.remove("visible");
-        toggleButtons(0);
-      }, delay);
-    }
-
-    clearWillChangeSoon();
-  }
-
-  function closeRow() {
-    snapTo(0);
-    if (openSwipeRow === row) openSwipeRow = null;
-  }
-
-  function onStart(e) {
-    if (!e.touches || e.touches.length !== 1) return;
-
-    if (openSwipeRow && openSwipeRow !== row) {
-      closeOpenSwipeRow();
-    }
-
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    baseX = curX;
-    lastMoveX = startX;
-    lastMoveTime = Date.now();
-    velocityX = 0;
-    dragging = true;
-    locked = false;
-    cancelTranslateFrame();
-    clearActionsHideSoon();
-    if (willChangeTimer !== null) {
-      window.clearTimeout(willChangeTimer);
-      willChangeTimer = null;
-    }
-    content.style.willChange = "transform";
-    content.style.transition = "none";
-  }
-
-  function onMove(e) {
-    if (!dragging || !e.touches || e.touches.length !== 1) return;
-
-    const x = e.touches[0].clientX;
-    const y = e.touches[0].clientY;
-    const dx = x - startX;
-    const dy = y - startY;
-
-    if (!locked) {
-      if (Math.hypot(dx, dy) < 5) return;
-      if (Math.abs(dy) > Math.abs(dx)) {
-        dragging = false;
-        content.style.willChange = "";
-        return;
-      }
-      locked = true;
-    }
-
-    if (e.cancelable) e.preventDefault();
-
-    let raw = baseX + dx;
-    const now = Date.now();
-    const dt = now - lastMoveTime;
-    if (dt > 0) {
-      velocityX = (x - lastMoveX) / dt;
-    }
-    lastMoveX = x;
-    lastMoveTime = now;
-
-    if (raw > 0) {
-      raw *= 0.2;
-    }
-
-    if (raw < -openPx) {
-      raw = -openPx + (raw + openPx) * SWIPE_CONFIG.DAMP;
-    }
-
-    curX = raw;
-    scheduleTranslate(raw);
-  }
-
-  function onEnd() {
-    if (!dragging) return;
-    dragging = false;
-
-    flushTranslateFrame();
-
-    if (deleteButton) deleteButton.classList.remove("expanding");
-
-    if (curX < -(window.innerWidth * SWIPE_CONFIG.FULL_FRAC)) {
-      closeRow();
-      if (navigator.vibrate) navigator.vibrate(10);
-      openDeleteSheet(row.getAttribute("data-weight-id"));
-      return;
-    }
-
-    if ((Math.abs(curX) > SWIPE_CONFIG.SNAP_PX || velocityX < SWIPE_CONFIG.FLICK_VELOCITY) && buttons.length > 0) {
-      snapTo(-(row._openPx || openPx));
+function initWeightSwipeRows(list) {
+  initSwipeRows(list, {
+    rowSelector: ".weight-swipe-row",
+    contentSelector: ".weight-row-content",
+    actionsSelector: ".weight-pill-actions",
+    buttonSelector: ".weight-pill-btn",
+    deleteButtonSelector: ".weight-pill-btn.delete",
+    config: SWIPE_CONFIG,
+    revealThresholdBase: 0.08,
+    revealThresholdStep: 0.14,
+    getOpenRow() {
+      return openSwipeRow;
+    },
+    setOpenRow(row) {
       openSwipeRow = row;
-      row._close = closeRow;
-    } else {
-      closeRow();
-    }
-  }
-
-  content.addEventListener("touchstart", onStart, { passive: true });
-  content.addEventListener("touchmove", onMove, { passive: false });
-  content.addEventListener("touchend", onEnd);
-  content.addEventListener("touchcancel", onEnd);
-  content.addEventListener("click", () => {
-    if (openSwipeRow === row) {
-      closeRow();
+    },
+    getDeleteId(row) {
+      return row.getAttribute("data-weight-id");
+    },
+    onDelete(weightId) {
+      openDeleteSheet(weightId);
     }
   });
-
-  row._close = closeRow;
-}
-
-function initWeightSwipeRows(list) {
-  if (!list) return;
-  const rows = list.querySelectorAll(".weight-swipe-row");
-  for (let i = 0; i < rows.length; i += 1) {
-    initWeightSwipeRow(rows[i]);
-  }
 }
 
 function setLatestState(state) {
@@ -813,7 +409,7 @@ export function openWeightModal(weightId) {
     if (!entry) return;
   }
 
-  lockWeightModalScroll();
+  weightModalScrollLock.lock();
   clearWeightModalTransitionWatcher();
 
   if (isEdit) {
@@ -885,7 +481,7 @@ export function closeWeightModal() {
 
   editingWeightId = null;
   setWeightModalMode(false);
-  unlockWeightModalScrollAfterKeyboard();
+  weightModalScrollLock.unlockAfterKeyboard();
 }
 
 function openDeleteSheet(weightId) {
@@ -1051,7 +647,7 @@ export function resetViewUiState() {
   weightInputUnit = "kg";
   closeDesktopMenu();
   closeOpenSwipeRow();
-  unlockWeightModalScrollNow();
+  weightModalScrollLock.unlockNow();
   setDeleteSheetOpenState(false);
   hideCalorieToast();
 }

@@ -1,9 +1,11 @@
 import base64
+import hashlib
+import json
 from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -11,10 +13,29 @@ from pydantic import BaseModel
 from meal_ai import MealAnalysisError, analyze_logged_meal
 
 BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+TEMPLATES_DIR = BASE_DIR / "templates"
+SERVICE_WORKER_TEMPLATE = BASE_DIR / "service-worker.js"
 DEFAULT_AVATAR_SIZE = 96
 MIN_AVATAR_SIZE = 64
 MAX_AVATAR_SIZE = 256
+MAX_ANALYSIS_IMAGES = 3
+MAX_ANALYSIS_IMAGE_BYTES = 4 * 1024 * 1024
 NOTIONISTS_AVATAR_API = "https://api.dicebear.com/9.x/notionists/svg"
+PRECACHE_PAGES = (
+    "/",
+    "/weights",
+    "/calories",
+    "/profile",
+    "/offline",
+)
+PRECACHE_STATIC_EXTENSIONS = {
+    ".css",
+    ".js",
+    ".json",
+    ".mjs",
+    ".png",
+}
 ALL_NOTIONISTS_HAIR_VARIANTS = (
     "variant63",
     "variant62",
@@ -101,8 +122,8 @@ MALE_HAIR_VARIANTS = tuple(
 
 app = FastAPI(title="MaxMode")
 
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 class MealEstimate(BaseModel):
@@ -164,6 +185,90 @@ def _page_response(request: Request, full: str, partial: str):
     return response
 
 
+def _iter_precache_static_urls() -> list[str]:
+    urls: list[str] = []
+    for path in sorted(STATIC_DIR.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in PRECACHE_STATIC_EXTENSIONS:
+            continue
+        relative = path.relative_to(STATIC_DIR).as_posix()
+        urls.append(f"/static/{relative}")
+    return urls
+
+
+def _build_precache_urls() -> list[str]:
+    return [*PRECACHE_PAGES, *_iter_precache_static_urls()]
+
+
+def _iter_cache_key_files(precache_urls: list[str]) -> list[Path]:
+    files = [SERVICE_WORKER_TEMPLATE, BASE_DIR / "main.py"]
+    files.extend(sorted(TEMPLATES_DIR.rglob("*.html")))
+    for url in precache_urls:
+        if not url.startswith("/static/"):
+            continue
+        files.append(STATIC_DIR / url.removeprefix("/static/"))
+    return files
+
+
+def _build_service_worker_cache_name(precache_urls: list[str]) -> str:
+    digest = hashlib.sha256()
+    for url in precache_urls:
+        digest.update(url.encode("utf-8"))
+        digest.update(b"\0")
+
+    for path in _iter_cache_key_files(precache_urls):
+        if not path.exists():
+            continue
+        stat = path.stat()
+        digest.update(path.relative_to(BASE_DIR).as_posix().encode("utf-8"))
+        digest.update(b":")
+        digest.update(str(stat.st_mtime_ns).encode("utf-8"))
+        digest.update(b":")
+        digest.update(str(stat.st_size).encode("utf-8"))
+        digest.update(b"\0")
+
+    return f"maxmode-{digest.hexdigest()[:12]}"
+
+
+def _render_service_worker() -> str:
+    precache_urls = _build_precache_urls()
+    cache_name = _build_service_worker_cache_name(precache_urls)
+    template = SERVICE_WORKER_TEMPLATE.read_text(encoding="utf-8")
+    return (
+        template
+        .replace("__CACHE_NAME__", json.dumps(cache_name))
+        .replace("__PRECACHE_URLS__", json.dumps(precache_urls))
+    )
+
+
+def _validate_analysis_uploads(uploads: list[UploadFile]) -> list[UploadFile]:
+    if len(uploads) > MAX_ANALYSIS_IMAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can upload up to {MAX_ANALYSIS_IMAGES} images per meal.",
+        )
+
+    valid_uploads: list[UploadFile] = []
+    for upload in uploads:
+        if not upload:
+            continue
+        content_type = (upload.content_type or "").strip().lower()
+        if not content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Only image uploads are supported.")
+        valid_uploads.append(upload)
+
+    return valid_uploads
+
+
+def _is_upload_like(value: object) -> bool:
+    return bool(
+        value
+        and hasattr(value, "read")
+        and hasattr(value, "content_type")
+    )
+
+
 async def _read_upload_payload(upload: UploadFile | None):
     if not upload:
         return None
@@ -171,6 +276,12 @@ async def _read_upload_payload(upload: UploadFile | None):
     payload = await upload.read()
     if not payload:
         return None
+    if len(payload) > MAX_ANALYSIS_IMAGE_BYTES:
+        max_mb = MAX_ANALYSIS_IMAGE_BYTES / (1024 * 1024)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Each image must be {max_mb:.0f} MB or smaller.",
+        )
 
     return {
         "encoded": base64.b64encode(payload).decode("utf-8"),
@@ -233,13 +344,15 @@ async def analyze_calorie_entry(
 ):
     try:
         uploads = []
-        if image:
+        if _is_upload_like(image):
             uploads.append(image)
         if isinstance(images, list):
-            uploads.extend(images)
+            uploads.extend(upload for upload in images if _is_upload_like(upload))
+
+        uploads = _validate_analysis_uploads(uploads)
 
         image_payloads = []
-        for upload in uploads[:3]:
+        for upload in uploads:
             payload = await _read_upload_payload(upload)
             if payload:
                 image_payloads.append(payload)
@@ -251,6 +364,8 @@ async def analyze_calorie_entry(
             goal_objective=goal_objective,
             ai_calculation_mode=ai_calculation_mode,
         )
+    except HTTPException:
+        raise
     except MealAnalysisError as exc:
         message = str(exc).strip() or "Unable to analyze this meal right now."
         status_code = 400 if "description or a photo" in message.lower() else 503
@@ -263,8 +378,8 @@ async def analyze_calorie_entry(
 
 @app.get("/service-worker.js")
 async def service_worker():
-    return FileResponse(
-        BASE_DIR / "service-worker.js",
+    return Response(
+        content=_render_service_worker(),
         media_type="application/javascript",
         headers={
             "Service-Worker-Allowed": "/",

@@ -1,8 +1,10 @@
 import unittest
+from io import BytesIO
 from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
 from starlette.requests import Request
+from starlette.datastructures import Headers, UploadFile
 from fastapi import HTTPException
 
 import main
@@ -32,6 +34,14 @@ def make_request(path: str, hx: bool = False) -> Request:
         "app": main.app,
     }
     return Request(scope)
+
+
+def make_upload(filename: str, content_type: str, payload: bytes) -> UploadFile:
+    return UploadFile(
+        file=BytesIO(payload),
+        filename=filename,
+        headers=Headers({"content-type": content_type}),
+    )
 
 
 class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
@@ -152,6 +162,15 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
         cache_control = response.headers.get("cache-control", "")
         self.assertIn("no-cache", cache_control)
 
+    async def test_service_worker_precache_covers_bootstrap_dependencies(self):
+        response = await main.service_worker()
+        body = response.body.decode("utf-8")
+
+        self.assertIn('/static/js/bootstrap.mjs', body)
+        self.assertIn('/static/js/modules/slider-ui.mjs', body)
+        self.assertNotIn("__PRECACHE_URLS__", body)
+        self.assertIn('var CACHE_NAME = "maxmode-', body)
+
     @patch("main.analyze_logged_meal")
     async def test_calorie_analysis_endpoint_returns_structured_meal(self, mock_analyze):
         mock_analyze.return_value = {
@@ -190,6 +209,40 @@ class RouteRenderingTests(unittest.IsolatedAsyncioTestCase):
             await main.analyze_calorie_entry(mode="manual", note="", image=None)
 
         self.assertEqual(context.exception.status_code, 400)
+
+    async def test_calorie_analysis_endpoint_rejects_too_many_images(self):
+        uploads = [
+            make_upload(f"meal-{index}.jpg", "image/jpeg", b"jpeg-bytes")
+            for index in range(main.MAX_ANALYSIS_IMAGES + 1)
+        ]
+
+        with self.assertRaises(HTTPException) as context:
+            await main.analyze_calorie_entry(mode="scan", note="", images=uploads)
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertIn("up to", context.exception.detail.lower())
+
+    async def test_calorie_analysis_endpoint_rejects_non_image_uploads(self):
+        upload = make_upload("meal.txt", "text/plain", b"not-an-image")
+
+        with self.assertRaises(HTTPException) as context:
+            await main.analyze_calorie_entry(mode="scan", note="meal", images=[upload])
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(context.exception.detail, "Only image uploads are supported.")
+
+    async def test_calorie_analysis_endpoint_rejects_oversize_images(self):
+        upload = make_upload(
+            "big.jpg",
+            "image/jpeg",
+            b"x" * (main.MAX_ANALYSIS_IMAGE_BYTES + 1),
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            await main.analyze_calorie_entry(mode="scan", note="meal", images=[upload])
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(context.exception.detail, "Each image must be 4 MB or smaller.")
 
 
 if __name__ == "__main__":

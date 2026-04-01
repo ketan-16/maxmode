@@ -240,6 +240,19 @@ function mealRowHtml(meal) {
   </article>`;
 }
 
+function buildDashboardMealsRenderKey(visibleMeals) {
+  if (!Array.isArray(visibleMeals) || visibleMeals.length === 0) return "empty";
+
+  const parts = [String(visibleMeals.length)];
+  for (let i = 0; i < visibleMeals.length; i += 1) {
+    const meal = visibleMeals[i];
+    parts.push(String(meal.id || ""));
+    parts.push(String(meal.loggedAt || ""));
+    parts.push(String(meal.calories || 0));
+  }
+  return parts.join("|");
+}
+
 function renderMealsCard(summary) {
   const metaEl = document.getElementById("dashboard-meals-meta");
   const listEl = document.getElementById("dashboard-today-meals-list");
@@ -252,12 +265,17 @@ function renderMealsCard(summary) {
     ? `${summary.mealCount} logged today`
     : "No meals logged today";
 
+  const nextKey = buildDashboardMealsRenderKey(visibleMeals);
   if (visibleMeals.length === 0) {
+    if (listEl.dataset.renderKey === nextKey) return;
     listEl.innerHTML = '<div class="dashboard-meals-empty">Today\'s meals will show up here after you log them.</div>';
+    listEl.dataset.renderKey = nextKey;
     return;
   }
 
+  if (listEl.dataset.renderKey === nextKey) return;
   listEl.innerHTML = visibleMeals.map((meal) => mealRowHtml(meal)).join("");
+  listEl.dataset.renderKey = nextKey;
 }
 
 export function render(state) {

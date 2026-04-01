@@ -13,6 +13,8 @@ export const FREQUENT_FOOD_LIMIT = 5;
 
 const VALID_SOURCES = new Set(["scan", "manual", "voice", "recent"]);
 const VALID_CONFIDENCE = new Set(["low", "medium", "high"]);
+const CALORIE_SUMMARY_CACHE = new WeakMap();
+const WEEKLY_SERIES_CACHE = new WeakMap();
 
 function parseFiniteNumber(value) {
   const parsed = (typeof value === "number") ? value : parseFloat(value);
@@ -112,6 +114,41 @@ function sortMealsNewestFirst(source) {
   });
 }
 
+function getCacheBucket(cache, state) {
+  if (!state || typeof state !== "object") return null;
+  let bucket = cache.get(state);
+  if (!bucket) {
+    bucket = new Map();
+    cache.set(state, bucket);
+  }
+  return bucket;
+}
+
+function buildReferenceCacheKey(referenceDate) {
+  return getLocalDayKey(referenceDate) || "__invalid__";
+}
+
+function isSortedNewestFirst(source) {
+  if (!Array.isArray(source) || source.length < 2) return true;
+
+  let lastTimestamp = new Date(source[0] && source[0].loggedAt).getTime();
+  if (!Number.isFinite(lastTimestamp)) return false;
+
+  for (let i = 1; i < source.length; i += 1) {
+    const currentTimestamp = new Date(source[i] && source[i].loggedAt).getTime();
+    if (!Number.isFinite(currentTimestamp)) return false;
+    if (currentTimestamp > lastTimestamp) return false;
+    lastTimestamp = currentTimestamp;
+  }
+
+  return true;
+}
+
+function getSortedMeals(source) {
+  const meals = Array.isArray(source) ? source : [];
+  return isSortedNewestFirst(meals) ? meals : sortMealsNewestFirst(meals);
+}
+
 export function normalizeMeals(rawMeals, nowIso) {
   if (!Array.isArray(rawMeals)) {
     return { meals: [], changed: rawMeals !== null };
@@ -197,7 +234,7 @@ export function getLocalDayKey(value) {
 
 export function getMealsForDay(meals, referenceDate = new Date()) {
   const dayKey = getLocalDayKey(referenceDate);
-  const source = Array.isArray(meals) ? meals : [];
+  const source = getSortedMeals(meals);
   const filtered = [];
 
   for (let i = 0; i < source.length; i += 1) {
@@ -207,7 +244,7 @@ export function getMealsForDay(meals, referenceDate = new Date()) {
     filtered.push(item);
   }
 
-  return sortMealsNewestFirst(filtered);
+  return filtered;
 }
 
 export function getMacroTargets(state) {
@@ -239,8 +276,14 @@ function formatWeekdayLetter(value) {
 }
 
 export function buildWeeklyCalorieIntakeSeries(state, referenceDate = new Date()) {
-  const sourceMeals = Array.isArray(state && state.meals) ? state.meals : [];
-  const allMeals = sortMealsNewestFirst(sourceMeals);
+  const sourceState = (state && typeof state === "object") ? state : {};
+  const cacheKey = buildReferenceCacheKey(referenceDate);
+  const cacheBucket = getCacheBucket(WEEKLY_SERIES_CACHE, sourceState);
+  if (cacheBucket && cacheBucket.has(cacheKey)) {
+    return cacheBucket.get(cacheKey);
+  }
+
+  const allMeals = getSortedMeals(sourceState.meals);
   const goalSummary = resolveCalorieGoalFromState(state);
   const goalCalories = goalSummary.goalCalories;
   const todayStart = startOfDay(referenceDate);
@@ -289,11 +332,15 @@ export function buildWeeklyCalorieIntakeSeries(state, referenceDate = new Date()
     day.isOver = goalCalories > 0 && day.consumedCalories > goalCalories;
   }
 
+  if (cacheBucket) {
+    cacheBucket.set(cacheKey, days);
+  }
+
   return days;
 }
 
 export function getRecentFoods(meals, limit = RECENT_FOOD_LIMIT) {
-  const source = sortMealsNewestFirst(Array.isArray(meals) ? meals : []);
+  const source = getSortedMeals(meals);
   const seen = new Set();
   const recent = [];
 
@@ -314,7 +361,7 @@ export function getRecentFoods(meals, limit = RECENT_FOOD_LIMIT) {
 }
 
 export function getFrequentFoods(meals, limit = FREQUENT_FOOD_LIMIT) {
-  const source = sortMealsNewestFirst(Array.isArray(meals) ? meals : []);
+  const source = getSortedMeals(meals);
   const entriesByKey = new Map();
 
   for (let i = 0; i < source.length; i += 1) {
@@ -424,7 +471,14 @@ export function getCalorieFeedback({ consumedCalories, goalCalories, mealCount }
 }
 
 export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
-  const allMeals = sortMealsNewestFirst(state && Array.isArray(state.meals) ? state.meals : []);
+  const sourceState = (state && typeof state === "object") ? state : {};
+  const cacheKey = buildReferenceCacheKey(referenceDate);
+  const cacheBucket = getCacheBucket(CALORIE_SUMMARY_CACHE, sourceState);
+  if (cacheBucket && cacheBucket.has(cacheKey)) {
+    return cacheBucket.get(cacheKey);
+  }
+
+  const allMeals = getSortedMeals(sourceState.meals);
   const todaysMeals = getMealsForDay(allMeals, referenceDate);
 
   let consumedCalories = 0;
@@ -439,16 +493,16 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     fat += normalizeMacroValue(todaysMeals[i].fat);
   }
 
-  const goalSummary = resolveCalorieGoalFromState(state);
+  const goalSummary = resolveCalorieGoalFromState(sourceState);
   const goalCalories = goalSummary.goalCalories;
-  const macroSummary = resolveMacroTargetsFromState(state);
+  const macroSummary = resolveMacroTargetsFromState(sourceState);
 
   const remainingCalories = goalCalories - consumedCalories;
   const progressRatio = goalCalories > 0 ? (consumedCalories / goalCalories) : 0;
   const overCalories = Math.max(0, consumedCalories - goalCalories);
   const isOver = remainingCalories < 0;
 
-  return {
+  const summary = {
     maintenanceCalories: goalSummary.maintenanceCalories,
     goalCalories,
     goalSource: goalSummary.goalSource,
@@ -481,4 +535,10 @@ export function buildCalorieTrackerSummary(state, referenceDate = new Date()) {
     reminder: getSmartReminder(allMeals, referenceDate),
     isOver
   };
+
+  if (cacheBucket) {
+    cacheBucket.set(cacheKey, summary);
+  }
+
+  return summary;
 }

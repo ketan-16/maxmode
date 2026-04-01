@@ -22,6 +22,7 @@ import { formatDate, formatWeightWithUnit, getHeightDisplay } from "../modules/d
 let latestState = null;
 let activityModalCloseTimer = null;
 let pendingActivityLevel = "";
+let profilePersistTimer = null;
 
 function getAvatarGender(user) {
   const profile = user && user.calorieProfile ? user.calorieProfile : null;
@@ -520,6 +521,25 @@ function persistProfileFields() {
     : null);
 }
 
+function queueProfileFieldsPersist() {
+  if (profilePersistTimer !== null) {
+    window.clearTimeout(profilePersistTimer);
+  }
+
+  profilePersistTimer = window.setTimeout(() => {
+    profilePersistTimer = null;
+    persistProfileFields();
+  }, 180);
+}
+
+function flushQueuedProfileFieldsPersist() {
+  if (profilePersistTimer !== null) {
+    window.clearTimeout(profilePersistTimer);
+    profilePersistTimer = null;
+  }
+  persistProfileFields();
+}
+
 function persistPreferences(preferencePatch) {
   latestState = setUserPreferences(preferencePatch);
 
@@ -630,7 +650,7 @@ function bindProfileEvents() {
       || id === "profile-height-cm-input"
       || id === "profile-height-ft-input"
       || id === "profile-height-in-input") {
-      persistProfileFields();
+      queueProfileFieldsPersist();
       return;
     }
 
@@ -653,7 +673,7 @@ function bindProfileEvents() {
       || id === "profile-height-cm-input"
       || id === "profile-height-ft-input"
       || id === "profile-height-in-input") {
-      persistProfileFields();
+      flushQueuedProfileFieldsPersist();
       return;
     }
 
