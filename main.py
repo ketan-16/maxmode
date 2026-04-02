@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from meal_ai import MealAnalysisError, analyze_logged_meal
 
@@ -133,6 +133,7 @@ class MealEstimate(BaseModel):
     carbs: int
     fat: int
     confidence: str
+    sources: list[str] = Field(default_factory=list)
 
 
 class MealEstimateResponse(BaseModel):

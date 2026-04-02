@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from meal_ai import (
     MEAL_AI_TEMPERATURE,
+    OPENAI_WEB_SEARCH_TOOL,
     _apply_ai_calculation_mode,
     _normalize_meal_payload,
     analyze_logged_meal,
@@ -85,7 +86,46 @@ class MealAiTests(unittest.TestCase):
         self.assertEqual(adjusted["fat"], 0)
         self.assertEqual(adjusted["calories"], 350)
 
-    def test_analyze_logged_meal_uses_temperature_point_two(self):
+    def test_analyze_logged_meal_uses_openai_responses_with_web_search(self):
+        mock_responses = Mock(return_value=types.SimpleNamespace(
+            output_text='{"name":"Chipotle bowl","calories":670,"protein":42,"carbs":61,"fat":24,"confidence":"high"}',
+            output=[
+                types.SimpleNamespace(
+                    type="web_search_call",
+                    action=types.SimpleNamespace(
+                        type="search",
+                        sources=[
+                            types.SimpleNamespace(url="https://www.chipotle.com/nutrition-calculator"),
+                            types.SimpleNamespace(url="https://www.nutritionix.com/brand/chipotle-mexican-grill")
+                        ],
+                    ),
+                )
+            ],
+        ))
+        fake_litellm_responses = types.SimpleNamespace(responses=mock_responses)
+
+        with patch.dict(sys.modules, {"litellm.responses.main": fake_litellm_responses}):
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+                meal = analyze_logged_meal(note="chipotle chicken bowl")
+
+        self.assertEqual(meal["name"], "Chipotle bowl")
+        self.assertEqual(meal["calories"], 670)
+        self.assertEqual(
+            meal["sources"],
+            [
+                "https://www.chipotle.com/nutrition-calculator",
+                "https://www.nutritionix.com/brand/chipotle-mexican-grill",
+            ],
+        )
+        mock_responses.assert_called_once()
+        self.assertEqual(mock_responses.call_args.kwargs["temperature"], MEAL_AI_TEMPERATURE)
+        self.assertEqual(mock_responses.call_args.kwargs["tools"], [OPENAI_WEB_SEARCH_TOOL])
+        self.assertEqual(
+            mock_responses.call_args.kwargs["include"],
+            ["web_search_call.action.sources"],
+        )
+
+    def test_analyze_logged_meal_keeps_completion_flow_for_non_openai_models(self):
         mock_completion = Mock(return_value=types.SimpleNamespace(
             choices=[types.SimpleNamespace(
                 message=types.SimpleNamespace(
@@ -96,7 +136,7 @@ class MealAiTests(unittest.TestCase):
         fake_litellm = types.SimpleNamespace(completion=mock_completion)
 
         with patch.dict(sys.modules, {"litellm": fake_litellm}):
-            with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            with patch.dict(os.environ, {"MEAL_AI_MODEL": "anthropic/claude-sonnet-4-5"}, clear=False):
                 meal = analyze_logged_meal(note="chicken rice bowl")
 
         self.assertEqual(meal["name"], "Chicken bowl")

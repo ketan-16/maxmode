@@ -784,6 +784,9 @@ function buildPreviewDraft(meal, mode = "create") {
   const baseProtein = Math.max(0, Math.round((meal && meal.baseProtein) || (meal && meal.protein) || 0));
   const baseCarbs = Math.max(0, Math.round((meal && meal.baseCarbs) || (meal && meal.carbs) || 0));
   const baseFat = Math.max(0, Math.round((meal && meal.baseFat) || (meal && meal.fat) || 0));
+  const sources = Array.isArray(meal && meal.sources)
+    ? meal.sources.filter((url) => typeof url === "string" && url.trim()).slice(0, 5)
+    : [];
 
   return {
     id: meal && meal.id ? meal.id : null,
@@ -792,6 +795,7 @@ function buildPreviewDraft(meal, mode = "create") {
     confidence: meal && meal.confidence ? meal.confidence : "medium",
     name: meal && meal.name ? meal.name : "Meal",
     loggedAt: meal && meal.loggedAt ? meal.loggedAt : null,
+    sources,
     portion,
     baseCalories,
     baseProtein,
@@ -811,6 +815,40 @@ function getConfidenceCopy(confidence) {
   if (confidence === "high") return "High confidence estimate";
   if (confidence === "low") return "Low confidence estimate";
   return "Medium confidence estimate";
+}
+
+function getPreviewSourceDomain(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch (_err) {
+    return url;
+  }
+}
+
+function renderPreviewSources() {
+  const container = document.getElementById("calorie-preview-sources");
+  const list = document.getElementById("calorie-preview-sources-list");
+  if (!container || !list || !previewDraft) return;
+
+  const sources = Array.isArray(previewDraft.sources)
+    ? previewDraft.sources.filter((url) => typeof url === "string" && url.trim())
+    : [];
+
+  if (sources.length === 0) {
+    list.innerHTML = "";
+    container.classList.add("hidden");
+    return;
+  }
+
+  list.innerHTML = sources.map((url) => `
+    <a class="calories-preview-source-pill"
+       href="${escapeHtml(url)}"
+       target="_blank"
+       rel="noopener noreferrer">
+      ${escapeHtml(getPreviewSourceDomain(url))}
+    </a>
+  `).join("");
+  container.classList.remove("hidden");
 }
 
 function getPreviewSliderPortion(slider, fallback = 1) {
@@ -901,6 +939,7 @@ function applyPreviewDraft() {
   nameInput.value = previewDraft.name;
   slider.value = String(previewDraft.portion);
   confidence.textContent = getConfidenceCopy(previewDraft.confidence);
+  renderPreviewSources();
   deleteBtn.classList.toggle("hidden", previewDraft.mode !== "edit");
   setPreviewError("");
   setPreviewLoading(false);

@@ -2797,6 +2797,48 @@ html.no-view-transition .htmx-settling {
   padding: 0.1rem 0 0;
 }
 
+.calories-preview-sources {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.82rem 0.9rem;
+  border: 1px solid var(--apple-separator);
+  border-radius: calc(var(--apple-radius-card) - 6px);
+  background: color-mix(in srgb, var(--apple-surface-elevated) 86%, var(--apple-fill-tertiary) 14%);
+}
+
+.calories-preview-sources-label {
+  margin: 0;
+}
+
+.calories-preview-sources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.calories-preview-source-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.38rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--apple-separator) 84%, transparent);
+  background: color-mix(in srgb, var(--apple-fill-quaternary) 76%, transparent);
+  color: var(--apple-link);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.calories-preview-source-pill:hover,
+.calories-preview-source-pill:focus-visible {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--apple-fill-tertiary) 74%, transparent);
+  border-color: color-mix(in srgb, var(--apple-link) 32%, var(--apple-separator));
+}
+
 .calories-preview-actions {
   display: flex;
   align-items: center;
