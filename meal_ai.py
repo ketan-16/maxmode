@@ -18,6 +18,25 @@ OPENAI_WEB_SEARCH_TOOL = {
     "search_context_size": "low",
 }
 MAX_MEAL_SOURCE_COUNT = 5
+APPROXIMATE_GRAM_PREFIX_PATTERN = r"(?:~|about|around|approx(?:\.|imately)?)\s*"
+PROTEIN_GRAM_VALUE_PATTERN = (
+    rf"(?:{APPROXIMATE_GRAM_PREFIX_PATTERN})?"
+    r"\d+(?:\.\d+)?"
+    r"(?:\s*(?:-|to)\s*"
+    rf"(?:{APPROXIMATE_GRAM_PREFIX_PATTERN})?"
+    r"\d+(?:\.\d+)?)?"
+    r"\s*(?:g|gr|gram|grams)\b"
+)
+EXPLICIT_PROTEIN_GRAMS_PATTERNS = (
+    re.compile(
+        rf"(?:^|[^\w]){PROTEIN_GRAM_VALUE_PATTERN}\s*(?:of\s+)?protein\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\bprotein\b(?:\s*[:\-]?\s*|\s*\(\s*){PROTEIN_GRAM_VALUE_PATTERN}",
+        re.IGNORECASE,
+    ),
+)
 
 SYSTEM_PROMPT = """
 You estimate a single logged meal for a lean calorie tracker.
@@ -29,14 +48,18 @@ Return JSON only with exactly these keys:
 - carbs: integer
 - fat: integer
 - confidence: "low" | "medium" | "high"
+- protein_grams_visible_in_image: boolean
 
 Rules:
 - Estimate one realistic serving for what is shown or described.
 - If multiple foods are present, combine them into a single meal entry.
+- Check if the total calories roughly match the macros. If not, adjust macros to better align with the calories.
 - Keep the name as short as possible, natural, and user-friendly.
 - Use whole numbers only.
 - Macros must be non-negative.
 - Calories should roughly match the macro estimate.
+- Set protein_grams_visible_in_image to true only when an attached image clearly shows a protein gram value on packaging, menu text, or overlaid text.
+- If no image clearly shows a protein gram value, set protein_grams_visible_in_image to false. Do not infer it from the food itself.
 - Do not wrap the JSON in markdown.
 """.strip()
 
@@ -52,6 +75,7 @@ class MealEstimateSchema(BaseModel):
     carbs: int
     fat: int
     confidence: Literal["low", "medium", "high"]
+    protein_grams_visible_in_image: bool = False
 
     model_config = {"extra": "forbid"}
 
@@ -210,6 +234,31 @@ def _normalize_ai_calculation_mode(value: Any) -> str:
     return "balanced"
 
 
+def _normalize_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return False
+
+
+def _note_has_explicit_protein_grams(note: Any) -> bool:
+    if not isinstance(note, str):
+        return False
+
+    trimmed = note.strip()
+    if not trimmed:
+        return False
+
+    for pattern in EXPLICIT_PROTEIN_GRAMS_PATTERNS:
+        if pattern.search(trimmed):
+            return True
+
+    return False
+
+
 def _normalize_meal_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise MealAnalysisError("AI response was not an object.")
@@ -241,17 +290,17 @@ def _normalize_meal_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _resolve_macro_adjustment_multiplier(goal_objective: Any, ai_calculation_mode: Any) -> float:
+def _resolve_aggressive_macro_multipliers(
+    goal_objective: Any,
+    *,
+    explicit_protein_grams_mentioned: bool = False,
+) -> tuple[float, float, float]:
     normalized_goal = _normalize_goal_objective(goal_objective)
-    normalized_mode = _normalize_ai_calculation_mode(ai_calculation_mode)
-
-    if normalized_mode != "aggressive":
-        return 1
     if normalized_goal == "lose":
-        return 1.1
+        return (1 if explicit_protein_grams_mentioned else 0.9, 1.1, 1.1)
     if normalized_goal == "gain":
-        return 0.9
-    return 1
+        return (1 if explicit_protein_grams_mentioned else 0.9, 0.9, 0.9)
+    return (1, 1, 1)
 
 
 def _apply_ai_calculation_mode(
@@ -259,14 +308,37 @@ def _apply_ai_calculation_mode(
     *,
     goal_objective: Any = None,
     ai_calculation_mode: Any = "balanced",
+    explicit_protein_grams_mentioned: bool = False,
 ) -> dict[str, Any]:
-    multiplier = _resolve_macro_adjustment_multiplier(goal_objective, ai_calculation_mode)
-    if multiplier == 1:
+    normalized_mode = _normalize_ai_calculation_mode(ai_calculation_mode)
+    if normalized_mode != "aggressive":
         return dict(meal)
 
-    protein = max(0, int(round(meal.get("protein", 0) * multiplier)))
-    carbs = max(0, int(round(meal.get("carbs", 0) * multiplier)))
-    fat = max(0, int(round(meal.get("fat", 0) * multiplier)))
+    protein_multiplier, carbs_multiplier, fat_multiplier = _resolve_aggressive_macro_multipliers(
+        goal_objective,
+        explicit_protein_grams_mentioned=explicit_protein_grams_mentioned,
+    )
+    if (
+        protein_multiplier == 1
+        and carbs_multiplier == 1
+        and fat_multiplier == 1
+    ):
+        return dict(meal)
+
+    original_protein = max(0, int(meal.get("protein", 0)))
+    original_carbs = max(0, int(meal.get("carbs", 0)))
+    original_fat = max(0, int(meal.get("fat", 0)))
+
+    protein = max(0, int(round(original_protein * protein_multiplier)))
+    carbs = max(0, int(round(original_carbs * carbs_multiplier)))
+    fat = max(0, int(round(original_fat * fat_multiplier)))
+    if (
+        protein == original_protein
+        and carbs == original_carbs
+        and fat == original_fat
+    ):
+        return dict(meal)
+
     adjusted_calories = _macro_calories(protein, carbs, fat)
 
     return {
@@ -290,6 +362,8 @@ def _build_user_content(
             "Estimate this meal for a calorie tracker.\n"
             f"Logging mode: {mode or 'manual'}.\n"
             f"User description: {note_copy or 'No text supplied.'}\n"
+            "If an image clearly shows a protein gram value on packaging, menu text, or overlay text,"
+            " set protein_grams_visible_in_image to true. Otherwise set it to false.\n"
             "Return JSON only."
         )
     }]
@@ -322,6 +396,8 @@ def _build_openai_responses_input(
             "Estimate this meal for a calorie tracker.\n"
             f"Logging mode: {mode or 'manual'}.\n"
             f"User description: {note_copy or 'No text supplied.'}\n"
+            "If an image clearly shows a protein gram value on packaging, menu text, or overlay text,"
+            " set protein_grams_visible_in_image to true. Otherwise set it to false.\n"
             "Use web search when it would materially improve nutrition accuracy, especially for branded,"
             " restaurant, or packaged foods.\n"
             "Return the structured meal object only."
@@ -497,11 +573,16 @@ def analyze_logged_meal(
             mode=mode,
         )
 
+    explicit_protein_grams_mentioned = (
+        _note_has_explicit_protein_grams(note_copy)
+        or _normalize_bool(payload.get("protein_grams_visible_in_image"))
+    )
     meal = _normalize_meal_payload(payload)
     adjusted_meal = _apply_ai_calculation_mode(
         meal,
         goal_objective=goal_objective,
         ai_calculation_mode=ai_calculation_mode,
+        explicit_protein_grams_mentioned=explicit_protein_grams_mentioned,
     )
     if sources:
         adjusted_meal["sources"] = sources

@@ -8,6 +8,7 @@ from meal_ai import (
     MEAL_AI_TEMPERATURE,
     OPENAI_WEB_SEARCH_TOOL,
     _apply_ai_calculation_mode,
+    _note_has_explicit_protein_grams,
     _normalize_meal_payload,
     analyze_logged_meal,
 )
@@ -38,19 +39,74 @@ class MealAiTests(unittest.TestCase):
 
         self.assertEqual(adjusted, meal)
 
-    def test_aggressive_cut_adds_ten_percent_to_macros_and_recalculates_calories(self):
+    def test_note_has_explicit_protein_grams_matches_supported_patterns(self):
+        supported_notes = (
+            "30g protein",
+            "protein 30g",
+            "about 30 grams of protein",
+            "~30g protein",
+            "30-35g protein",
+            "protein: 30.5 g",
+        )
+
+        for note in supported_notes:
+            with self.subTest(note=note):
+                self.assertTrue(_note_has_explicit_protein_grams(note))
+
+    def test_note_has_explicit_protein_grams_skips_vague_or_unrelated_patterns(self):
+        excluded_notes = (
+            "30g chicken",
+            "high protein bowl",
+            "protein bar",
+            "extra protein",
+            "double chicken",
+            "30 grams",
+            "protein bowl",
+        )
+
+        for note in excluded_notes:
+            with self.subTest(note=note):
+                self.assertFalse(_note_has_explicit_protein_grams(note))
+
+    def test_aggressive_cut_preserves_explicit_protein_and_recalculates_remaining_macros(self):
+        adjusted = _apply_ai_calculation_mode(
+            normalized_meal(),
+            goal_objective="lose",
+            ai_calculation_mode="aggressive",
+            explicit_protein_grams_mentioned=True,
+        )
+
+        self.assertEqual(adjusted["protein"], 40)
+        self.assertEqual(adjusted["carbs"], 55)
+        self.assertEqual(adjusted["fat"], 22)
+        self.assertEqual(adjusted["calories"], 578)
+
+    def test_aggressive_cut_without_explicit_protein_reduces_protein_and_recalculates_calories(self):
         adjusted = _apply_ai_calculation_mode(
             normalized_meal(),
             goal_objective="lose",
             ai_calculation_mode="aggressive",
         )
 
-        self.assertEqual(adjusted["protein"], 44)
+        self.assertEqual(adjusted["protein"], 36)
         self.assertEqual(adjusted["carbs"], 55)
         self.assertEqual(adjusted["fat"], 22)
-        self.assertEqual(adjusted["calories"], 594)
+        self.assertEqual(adjusted["calories"], 562)
 
-    def test_aggressive_bulk_removes_ten_percent_from_macros_and_recalculates_calories(self):
+    def test_aggressive_bulk_preserves_explicit_protein_and_recalculates_remaining_macros(self):
+        adjusted = _apply_ai_calculation_mode(
+            normalized_meal(),
+            goal_objective="gain",
+            ai_calculation_mode="aggressive",
+            explicit_protein_grams_mentioned=True,
+        )
+
+        self.assertEqual(adjusted["protein"], 40)
+        self.assertEqual(adjusted["carbs"], 45)
+        self.assertEqual(adjusted["fat"], 18)
+        self.assertEqual(adjusted["calories"], 502)
+
+    def test_aggressive_bulk_without_explicit_protein_reduces_all_macros_and_recalculates_calories(self):
         adjusted = _apply_ai_calculation_mode(
             normalized_meal(),
             goal_objective="gain",
@@ -66,13 +122,18 @@ class MealAiTests(unittest.TestCase):
         meal = normalized_meal()
 
         for goal_objective in ("maintain", None):
-            with self.subTest(goal_objective=goal_objective):
+            for explicit_protein_grams_mentioned in (False, True):
                 adjusted = _apply_ai_calculation_mode(
                     meal,
                     goal_objective=goal_objective,
                     ai_calculation_mode="aggressive",
+                    explicit_protein_grams_mentioned=explicit_protein_grams_mentioned,
                 )
-                self.assertEqual(adjusted, meal)
+                with self.subTest(
+                    goal_objective=goal_objective,
+                    explicit_protein_grams_mentioned=explicit_protein_grams_mentioned,
+                ):
+                    self.assertEqual(adjusted, meal)
 
     def test_zero_macro_meals_keep_original_calories_when_adjustment_stays_zero(self):
         adjusted = _apply_ai_calculation_mode(
@@ -85,6 +146,31 @@ class MealAiTests(unittest.TestCase):
         self.assertEqual(adjusted["carbs"], 0)
         self.assertEqual(adjusted["fat"], 0)
         self.assertEqual(adjusted["calories"], 350)
+
+    def test_analyze_logged_meal_uses_image_protein_flag_for_openai_aggressive_cut(self):
+        mock_responses = Mock(return_value=types.SimpleNamespace(
+            output_text=(
+                '{"name":"Greek yogurt","calories":250,"protein":20,"carbs":18,'
+                '"fat":5,"confidence":"high","protein_grams_visible_in_image":true}'
+            ),
+            output=[],
+        ))
+        fake_litellm_responses = types.SimpleNamespace(responses=mock_responses)
+
+        with patch.dict(sys.modules, {"litellm.responses.main": fake_litellm_responses}):
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+                meal = analyze_logged_meal(
+                    note="packaged yogurt",
+                    image_payloads=[{"encoded": "abc", "content_type": "image/jpeg"}],
+                    goal_objective="lose",
+                    ai_calculation_mode="aggressive",
+                )
+
+        self.assertEqual(meal["protein"], 20)
+        self.assertEqual(meal["carbs"], 20)
+        self.assertEqual(meal["fat"], 6)
+        self.assertEqual(meal["calories"], 214)
+        self.assertNotIn("protein_grams_visible_in_image", meal)
 
     def test_analyze_logged_meal_uses_openai_responses_with_web_search(self):
         mock_responses = Mock(return_value=types.SimpleNamespace(
@@ -124,6 +210,34 @@ class MealAiTests(unittest.TestCase):
             mock_responses.call_args.kwargs["include"],
             ["web_search_call.action.sources"],
         )
+
+    def test_analyze_logged_meal_uses_image_protein_flag_for_completion_aggressive_bulk(self):
+        mock_completion = Mock(return_value=types.SimpleNamespace(
+            choices=[types.SimpleNamespace(
+                message=types.SimpleNamespace(
+                    content=(
+                        '{"name":"Chicken bowl","calories":620,"protein":38,"carbs":58,"fat":22,'
+                        '"confidence":"high","protein_grams_visible_in_image":true}'
+                    )
+                )
+            )]
+        ))
+        fake_litellm = types.SimpleNamespace(completion=mock_completion)
+
+        with patch.dict(sys.modules, {"litellm": fake_litellm}):
+            with patch.dict(os.environ, {"MEAL_AI_MODEL": "anthropic/claude-sonnet-4-5"}, clear=False):
+                meal = analyze_logged_meal(
+                    note="packaged chicken bowl",
+                    image_payloads=[{"encoded": "abc", "content_type": "image/jpeg"}],
+                    goal_objective="gain",
+                    ai_calculation_mode="aggressive",
+                )
+
+        self.assertEqual(meal["protein"], 38)
+        self.assertEqual(meal["carbs"], 52)
+        self.assertEqual(meal["fat"], 20)
+        self.assertEqual(meal["calories"], 540)
+        self.assertNotIn("protein_grams_visible_in_image", meal)
 
     def test_analyze_logged_meal_keeps_completion_flow_for_non_openai_models(self):
         mock_completion = Mock(return_value=types.SimpleNamespace(
