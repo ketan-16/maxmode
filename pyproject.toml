@@ -5,10 +5,15 @@ description = "A no-bs, snappy, self-hosted weight and calorie tracker"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiosqlite>=0.21.0",
+    "alembic>=1.16.5",
+    "argon2-cffi>=25.1.0",
     "fastapi>=0.129.1",
+    "greenlet>=3.2.4",
     "jinja2>=3.1.6",
     "litellm>=1.79.0",
     "python-dotenv>=1.1.0",
     "python-multipart>=0.0.22",
+    "sqlalchemy>=2.0.44",
     "uvicorn>=0.41.0",
 ]

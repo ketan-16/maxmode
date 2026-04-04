@@ -55,6 +55,18 @@ self.addEventListener("message", function (event) {
   }
 });
 
+self.addEventListener("sync", function (event) {
+  if (!event || event.tag !== "maxmode-sync") return;
+
+  event.waitUntil(
+    self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then(function (clients) {
+      return Promise.all(clients.map(function (client) {
+        client.postMessage({ type: "TRIGGER_SYNC" });
+      }));
+    })
+  );
+});
+
 self.addEventListener("fetch", function (event) {
   var request = event.request;
 

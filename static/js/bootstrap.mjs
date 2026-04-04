@@ -1,6 +1,9 @@
 import {
   clearAllData,
+  initStorage,
   loadState,
+  refreshAuthSession,
+  syncNow,
   setUserName
 } from "./modules/storage.mjs";
 import { refreshRangeSliders } from "./modules/slider-ui.mjs";
@@ -338,9 +341,14 @@ function handleOnboardingSubmit(event) {
   queueRender();
 }
 
-function resetData() {
+async function resetData() {
   if (!confirm("This will permanently delete all your data. Are you sure?")) return;
-  clearAllData();
+  try {
+    await clearAllData();
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "Unable to reset your data right now.");
+    return;
+  }
   window.location.href = "/";
 }
 
@@ -349,8 +357,27 @@ function bindGlobalEvents() {
   globalEventsBound = true;
 
   bindWeightChartThemeEvents(() => queueRender());
-  window.addEventListener("online", syncConnectivityIndicator, { passive: true });
+  window.addEventListener("maxmode:state-changed", queueRender);
+  window.addEventListener("online", () => {
+    syncConnectivityIndicator();
+    refreshAuthSession().then(() => syncNow());
+  }, { passive: true });
   window.addEventListener("offline", syncConnectivityIndicator, { passive: true });
+  window.addEventListener("focus", () => {
+    refreshAuthSession().then(() => syncNow());
+  }, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshAuthSession().then(() => syncNow());
+    }
+  });
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "TRIGGER_SYNC") {
+        syncNow();
+      }
+    });
+  }
 
   document.addEventListener("click", (event) => {
     const target = event.target;
@@ -451,16 +478,28 @@ function configureViewTransitions() {
   }
 }
 
-function onPageLoad() {
+async function onPageLoad() {
   configureViewTransitions();
   initSidebarState();
   resetAllViewUiState();
   bindGlobalEvents();
   syncConnectivityIndicator();
+  try {
+    await initStorage();
+  } catch (err) {
+    console.error("Failed to initialize MaxMode storage:", err);
+  }
   renderActiveView();
+  refreshAuthSession().then(() => syncNow()).catch((err) => {
+    console.error("Failed to refresh MaxMode auth session:", err);
+  });
 }
 
-document.addEventListener("DOMContentLoaded", onPageLoad);
+document.addEventListener("DOMContentLoaded", () => {
+  onPageLoad().catch((err) => {
+    console.error("Failed to bootstrap MaxMode:", err);
+  });
+});
 document.body.addEventListener("htmx:afterSwap", (event) => {
   if (event.detail && event.detail.target && event.detail.target.id === "main-content") {
     resetAllViewUiState();

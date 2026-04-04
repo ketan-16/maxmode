@@ -755,6 +755,7 @@ html.no-view-transition .htmx-settling {
 }
 
 .app-nav-avatar-link {
+  position: relative;
   display: inline-flex;
   border-radius: var(--apple-radius-pill);
 }
@@ -771,6 +772,32 @@ html.no-view-transition .htmx-settling {
   border: 1px solid var(--apple-separator);
   background: var(--apple-fill);
   object-fit: cover;
+}
+
+.app-nav-auth-badge {
+  position: absolute;
+  top: -0.15rem;
+  right: -0.1rem;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: var(--apple-radius-pill);
+  background: linear-gradient(180deg, #ff6b59 0%, #ff3b30 100%);
+  border: 2px solid var(--apple-nav-bg);
+  box-shadow: 0 4px 10px rgba(255, 59, 48, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.72);
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized),
+    visibility 0s linear var(--motion-duration-base);
+}
+
+.app-nav-auth-badge.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  transition-delay: 0s, 0s, 0s;
 }
 
 .app-shell {
@@ -4848,6 +4875,59 @@ html.no-view-transition .htmx-settling {
   text-align: center;
 }
 
+.profile-auth-card {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.profile-auth-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.profile-auth-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.9rem;
+  padding: 0.34rem 0.7rem;
+  border-radius: var(--apple-radius-pill);
+  background: color-mix(in srgb, var(--apple-destructive) 12%, var(--apple-surface));
+  color: var(--apple-destructive);
+  white-space: nowrap;
+  font-size: 0.74rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 680;
+}
+
+.profile-auth-form {
+  margin-top: 0.95rem;
+  gap: 0.8rem;
+}
+
+.profile-auth-segmented {
+  max-width: 18rem;
+}
+
+.profile-auth-member {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.profile-auth-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.profile-auth-error {
+  color: var(--apple-destructive);
+}
+
 .profile-avatar {
   width: 6rem;
   height: 6rem;
@@ -5098,6 +5178,12 @@ html.no-view-transition .htmx-settling {
 }
 
 @media (max-width: 520px) {
+  .profile-auth-header,
+  .profile-auth-member-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .profile-advanced-header {
     flex-direction: column;
     align-items: stretch;

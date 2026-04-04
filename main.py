@@ -2,14 +2,28 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.auth import (
+    AuthError,
+    account_has_server_data,
+    authenticate_user,
+    create_account_with_user,
+    get_session_context,
+    revoke_session,
+)
+from db.config import SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS, is_secure_cookie_env
+from db.migrations import ensure_database_ready
+from db.session import get_db_session
+from db.sync import SyncRequest, SyncResponse, apply_sync_request
 from meal_ai import MealAnalysisError, analyze_logged_meal
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -140,6 +154,17 @@ class MealEstimateResponse(BaseModel):
     meal: MealEstimate
 
 
+class AuthCredentials(BaseModel):
+    email: str
+    password: str
+
+
+class AuthSessionResponse(BaseModel):
+    authenticated: bool
+    email: str | None = None
+    hasServerData: bool = False
+
+
 def _normalize_avatar_name(name: str | None):
     if not isinstance(name, str):
         return "MaxMode Member"
@@ -184,6 +209,61 @@ def _page_response(request: Request, full: str, partial: str):
     response = templates.TemplateResponse(request, template)
     response.headers["Vary"] = "HX-Request"
     return response
+
+
+def _request_origin(request: Request) -> str:
+    return f"{request.url.scheme}://{request.url.netloc}"
+
+
+def _enforce_same_origin(request: Request):
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+    expected_origin = _request_origin(request)
+
+    if origin and origin != expected_origin:
+        raise HTTPException(status_code=403, detail="Cross-origin requests are not allowed.")
+
+    if not origin and referer:
+        referer_origin = urlparse(referer)
+        candidate = f"{referer_origin.scheme}://{referer_origin.netloc}"
+        if candidate != expected_origin:
+            raise HTTPException(status_code=403, detail="Cross-origin requests are not allowed.")
+
+
+def _set_session_cookie(response: JSONResponse, raw_token: str):
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=raw_token,
+        httponly=True,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        expires=SESSION_MAX_AGE_SECONDS,
+        samesite="lax",
+        secure=is_secure_cookie_env(),
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: JSONResponse):
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=is_secure_cookie_env(),
+    )
+
+
+async def _require_session(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    session_context = await get_session_context(
+        db_session,
+        request.cookies.get(SESSION_COOKIE_NAME),
+    )
+    if session_context is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return session_context
 
 
 def _iter_precache_static_urls() -> list[str]:
@@ -290,6 +370,11 @@ async def _read_upload_payload(upload: UploadFile | None):
     }
 
 
+@app.on_event("startup")
+async def _startup():
+    ensure_database_ready()
+
+
 @app.get("/")
 async def dashboard(request: Request):
     return _page_response(request, "dashboard.html", "partials/dashboard_content.html")
@@ -313,6 +398,128 @@ async def profile(request: Request):
 @app.get("/offline")
 async def offline(request: Request):
     return templates.TemplateResponse(request, "offline.html")
+
+
+@app.get("/api/auth/session", response_model=AuthSessionResponse)
+async def auth_session(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    raw_token = request.cookies.get(SESSION_COOKIE_NAME)
+    session_context = await get_session_context(
+        db_session,
+        raw_token,
+    )
+    if session_context is None:
+        response = JSONResponse(AuthSessionResponse(authenticated=False).model_dump())
+        if raw_token:
+            _clear_session_cookie(response)
+        return response
+
+    payload = AuthSessionResponse(
+        authenticated=True,
+        email=session_context.email,
+        hasServerData=await account_has_server_data(db_session, session_context.account_id),
+    )
+    response = JSONResponse(payload.model_dump())
+    _set_session_cookie(response, session_context.raw_token)
+    await db_session.commit()
+    return response
+
+
+@app.post("/api/auth/sign-up", response_model=AuthSessionResponse)
+async def auth_sign_up(
+    request: Request,
+    credentials: AuthCredentials,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    _enforce_same_origin(request)
+    try:
+        session_context = await create_account_with_user(
+            db_session,
+            email=credentials.email,
+            password=credentials.password,
+        )
+    except AuthError as exc:
+        await db_session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    payload = AuthSessionResponse(
+        authenticated=True,
+        email=session_context.email,
+        hasServerData=False,
+    )
+    response = JSONResponse(payload.model_dump())
+    _set_session_cookie(response, session_context.raw_token)
+    await db_session.commit()
+    return response
+
+
+@app.post("/api/auth/sign-in", response_model=AuthSessionResponse)
+async def auth_sign_in(
+    request: Request,
+    credentials: AuthCredentials,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    _enforce_same_origin(request)
+    try:
+        session_context = await authenticate_user(
+            db_session,
+            email=credentials.email,
+            password=credentials.password,
+        )
+        has_server_data = await account_has_server_data(db_session, session_context.account_id)
+    except AuthError as exc:
+        await db_session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    payload = AuthSessionResponse(
+        authenticated=True,
+        email=session_context.email,
+        hasServerData=has_server_data,
+    )
+    response = JSONResponse(payload.model_dump())
+    _set_session_cookie(response, session_context.raw_token)
+    await db_session.commit()
+    return response
+
+
+@app.post("/api/auth/sign-out")
+async def auth_sign_out(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    _enforce_same_origin(request)
+    await revoke_session(db_session, request.cookies.get(SESSION_COOKIE_NAME))
+    await db_session.commit()
+    response = JSONResponse({"ok": True})
+    _clear_session_cookie(response)
+    return response
+
+
+@app.post("/api/sync", response_model=SyncResponse)
+async def sync_data(
+    request: Request,
+    sync_request: SyncRequest,
+    session_context=Depends(_require_session),
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    _enforce_same_origin(request)
+
+    try:
+        payload = await apply_sync_request(
+            db_session,
+            account_id=session_context.account_id,
+            request=sync_request,
+        )
+    except AuthError as exc:
+        await db_session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    response = JSONResponse(payload.model_dump())
+    _set_session_cookie(response, session_context.raw_token)
+    await db_session.commit()
+    return response
 
 
 @app.get("/api/profile/picture")

@@ -1,7 +1,11 @@
 import {
   avatarUrl,
+  getAuthState,
   getUserPreferences,
   loadState,
+  signIn,
+  signOut,
+  signUp,
   setCalorieProfile,
   setUserPreferences
 } from "../modules/storage.mjs";
@@ -23,20 +27,121 @@ let latestState = null;
 let activityModalCloseTimer = null;
 let pendingActivityLevel = "";
 let profilePersistTimer = null;
+let authFeedback = "";
+let authSubmitting = false;
 
 function getAvatarGender(user) {
   const profile = user && user.calorieProfile ? user.calorieProfile : null;
   return profile && typeof profile.gender === "string" ? profile.gender : "";
 }
 
+function placeholderAvatar(size) {
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'%3E%3Crect width='${size}' height='${size}' rx='${Math.round(size / 2)}' fill='%23e5e5ea'/%3E%3C/svg%3E`;
+}
+
 function renderAvatarImage(elementId, user, size = 96) {
   const img = document.getElementById(elementId);
-  if (!img || !user || !user.name) return;
+  if (!img) return;
+  if (!user || !user.name) {
+    img.src = placeholderAvatar(size);
+    return;
+  }
   img.src = avatarUrl(user.name, getAvatarGender(user), size);
 }
 
 function renderProfileAvatar(user) {
   renderAvatarImage("profile-avatar", user, 144);
+}
+
+function renderAuthReminderBadge(authState) {
+  const badge = document.getElementById("nav-auth-badge");
+  if (!badge) return;
+  const visible = !authState || authState.status !== "authenticated";
+  badge.classList.toggle("is-visible", visible);
+  badge.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function formatSyncStatus(authState) {
+  if (!authState || authState.status !== "authenticated") {
+    return "Create an account to sync your data across devices.";
+  }
+  if (authState.syncStatus === "syncing") {
+    return "Syncing your latest changes.";
+  }
+  if (authState.syncStatus === "error") {
+    return authState.lastSyncError || "We couldn't reach the server. Your local data is still safe on this device.";
+  }
+  if (authState.pendingMutationCount > 0) {
+    return `${authState.pendingMutationCount} change${authState.pendingMutationCount === 1 ? "" : "s"} waiting to sync.`;
+  }
+  if (authState.lastSyncAt) {
+    return `Last synced ${new Date(authState.lastSyncAt).toLocaleString()}.`;
+  }
+  if (authState.hasServerData) {
+    return "Account connected and ready.";
+  }
+  return "You're signed in. Local data will sync once you add it.";
+}
+
+function setAuthFeedback(message) {
+  authFeedback = message || "";
+  const errorEl = document.getElementById("profile-auth-error");
+  if (!errorEl) return;
+  errorEl.textContent = authFeedback;
+  errorEl.classList.toggle("hidden", !authFeedback);
+}
+
+function renderAuthCard(state) {
+  const authState = getAuthState(state);
+  const guestEl = document.getElementById("profile-auth-guest");
+  const memberEl = document.getElementById("profile-auth-member");
+  const copyEl = document.getElementById("profile-auth-copy");
+  const pillEl = document.getElementById("profile-auth-badge-copy");
+  const submitButton = document.getElementById("profile-auth-submit");
+  const emailDisplay = document.getElementById("profile-auth-email-display");
+  const syncStatus = document.getElementById("profile-auth-sync-status");
+  const authModeInput = document.getElementById("profile-auth-mode");
+  const passwordInput = document.getElementById("profile-auth-password");
+
+  renderAuthReminderBadge(authState);
+
+  if (guestEl) guestEl.classList.toggle("hidden", authState.status === "authenticated");
+  if (memberEl) memberEl.classList.toggle("hidden", authState.status !== "authenticated");
+
+  if (copyEl) {
+    const authMode = authModeInput ? normalizeAuthMode(authModeInput.value) : "signup";
+    copyEl.textContent = authState.status === "authenticated"
+      ? "This device is connected to your account."
+      : authMode === "signin"
+        ? "Sign back in to pull your saved data from the server."
+        : "Create an account to sync this device across installs and keep your data safe.";
+  }
+
+  if (pillEl) {
+    pillEl.textContent = authState.status === "authenticated" ? "Connected" : "Sign in required";
+  }
+
+  if (submitButton) {
+    const authMode = authModeInput ? normalizeAuthMode(authModeInput.value) : "signup";
+    submitButton.textContent = authSubmitting
+      ? (authMode === "signin" ? "Signing in..." : "Creating account...")
+      : (authMode === "signin" ? "Sign in" : "Create account");
+    submitButton.disabled = authSubmitting;
+  }
+
+  if (emailDisplay) {
+    emailDisplay.textContent = authState.email || "--";
+  }
+  if (syncStatus) {
+    syncStatus.textContent = formatSyncStatus(authState);
+  }
+  if (passwordInput) {
+    passwordInput.autocomplete = (authModeInput && normalizeAuthMode(authModeInput.value) === "signin")
+      ? "current-password"
+      : "new-password";
+  }
+
+  setAuthFeedback(authFeedback || authState.lastError || "");
 }
 
 function isValidActivityLevel(activityLevel) {
@@ -67,11 +172,16 @@ function normalizePreferenceAiCalculationMode(mode) {
   return (mode === "aggressive") ? "aggressive" : "balanced";
 }
 
+function normalizeAuthMode(mode) {
+  return mode === "signin" ? "signin" : "signup";
+}
+
 function normalizeProfileSegmentValue(inputId, value) {
   if (inputId === "profile-gender-input") return normalizeProfileGender(value);
   if (inputId === "profile-pref-height-unit") return normalizePreferenceHeightUnit(value);
   if (inputId === "profile-pref-weight-unit") return normalizePreferenceWeightUnit(value);
   if (inputId === "profile-ai-calculation-mode") return normalizePreferenceAiCalculationMode(value);
+  if (inputId === "profile-auth-mode") return normalizeAuthMode(value);
   return null;
 }
 
@@ -562,6 +672,55 @@ function saveActivityLevel() {
   closeActivityModal();
 }
 
+async function submitAuthForm() {
+  const emailInput = document.getElementById("profile-auth-email");
+  const passwordInput = document.getElementById("profile-auth-password");
+  const modeInput = document.getElementById("profile-auth-mode");
+  if (!emailInput || !passwordInput || !modeInput || authSubmitting) return;
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  if (!email || !password) {
+    setAuthFeedback("Enter both your email and password.");
+    return;
+  }
+
+  authSubmitting = true;
+  authFeedback = "";
+  renderAuthCard(latestState || loadState());
+
+  try {
+    if (normalizeAuthMode(modeInput.value) === "signin") {
+      latestState = await signIn(email, password);
+    } else {
+      latestState = await signUp(email, password);
+    }
+    authFeedback = "";
+    passwordInput.value = "";
+  } catch (error) {
+    authFeedback = error instanceof Error ? error.message : "Unable to update your account right now.";
+  } finally {
+    authSubmitting = false;
+    render(latestState || loadState());
+  }
+}
+
+async function handleProfileSignOut() {
+  if (authSubmitting) return;
+  authSubmitting = true;
+  authFeedback = "";
+  renderAuthCard(latestState || loadState());
+
+  try {
+    latestState = await signOut();
+  } catch (error) {
+    authFeedback = error instanceof Error ? error.message : "Unable to sign out right now.";
+  } finally {
+    authSubmitting = false;
+    render(latestState || loadState());
+  }
+}
+
 function bindProfileEvents() {
   const root = document.getElementById("profile-page-root");
   if (!root || root.dataset.profileBound === "1") return;
@@ -593,6 +752,11 @@ function bindProfileEvents() {
 
       if (actionName === "reset-protein-goal-default") {
         resetProteinGoalDefault();
+        return;
+      }
+
+      if (actionName === "profile-sign-out") {
+        handleProfileSignOut();
         return;
       }
     }
@@ -631,6 +795,12 @@ function bindProfileEvents() {
 
       if (inputId === "profile-ai-calculation-mode") {
         persistPreferences({ aiCalculationMode: normalizePreferenceAiCalculationMode(nextValue) });
+        return;
+      }
+
+      if (inputId === "profile-auth-mode") {
+        authFeedback = "";
+        renderAuthCard(latestState || loadState());
       }
       return;
     }
@@ -703,10 +873,18 @@ function bindProfileEvents() {
       }
     }
   });
+
+  root.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (!form || form.id !== "profile-auth-form") return;
+    event.preventDefault();
+    submitAuthForm();
+  });
 }
 
-export function renderNavAvatar(user) {
+export function renderNavAvatar(user, authState = null) {
   renderAvatarImage("nav-avatar", user, 96);
+  renderAuthReminderBadge(authState || getAuthState(latestState || loadState()));
 }
 
 export function handleEscape() {
@@ -721,27 +899,34 @@ export function render(state) {
 
   latestState = state || loadState();
   const user = latestState && latestState.user ? latestState.user : null;
-  if (!user) return;
+  const authState = getAuthState(latestState);
+  const fallbackName = authState.email ? authState.email.split("@")[0] : "Guest";
 
-  nameEl.textContent = user.name;
+  nameEl.textContent = user && user.name ? user.name : fallbackName;
 
-  renderNavAvatar(user);
+  renderNavAvatar(user, authState);
   renderProfileAvatar(user);
+  renderAuthCard(latestState);
 
   const sinceEl = document.getElementById("profile-since");
-  if (sinceEl) sinceEl.textContent = `Member since ${formatDate(user.createdAt)}`;
+  if (sinceEl) {
+    sinceEl.textContent = user
+      ? `Member since ${formatDate(user.createdAt)}`
+      : (authState.status === "authenticated" ? "Signed in account" : "Local guest profile");
+  }
 
   const preferences = getUserPreferences(latestState);
 
-  populateCalorieForm(user.calorieProfile, preferences);
+  populateCalorieForm(user ? user.calorieProfile : null, preferences);
   renderPreferences(preferences);
   renderLatestWeight(latestState);
   renderProteinSettings(latestState);
-  renderActivityText(user.calorieProfile ? user.calorieProfile.activityLevel : null);
+  renderActivityText(user && user.calorieProfile ? user.calorieProfile.activityLevel : null);
   syncProfileSegmentedControl("profile-gender-input");
   syncProfileSegmentedControl("profile-pref-height-unit");
   syncProfileSegmentedControl("profile-pref-weight-unit");
   syncProfileSegmentedControl("profile-ai-calculation-mode");
+  syncProfileSegmentedControl("profile-auth-mode");
   bindProfileEvents();
 
   if (!isActivityModalOpen()) {

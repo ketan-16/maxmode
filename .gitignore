@@ -19,3 +19,6 @@ AGENTS.md
 
 # Credentials and configuration files
 .env
+
+# Local app data
+.data/
