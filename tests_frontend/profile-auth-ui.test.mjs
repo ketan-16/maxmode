@@ -69,6 +69,8 @@ function installProfileDom() {
       textContent: "",
       value: "",
       src: "",
+      focus() {},
+      scrollIntoView() {},
       setAttribute(name, value) {
         this[name] = value;
       },
@@ -92,10 +94,15 @@ function installProfileDom() {
   register("profile-name");
   register("profile-avatar");
   register("profile-since");
+  register("profile-auth-modal", { classList: createClassList() });
+  register("profile-auth-card");
+  register("profile-auth-inline");
+  register("profile-auth-inline-copy");
   register("profile-auth-guest");
   register("profile-auth-member", { classList: createClassList() });
   register("profile-auth-copy");
   register("profile-auth-badge-copy");
+  register("profile-auth-email");
   register("profile-auth-submit");
   register("profile-auth-email-display");
   register("profile-auth-sync-status");
@@ -216,6 +223,64 @@ test("renderNavAvatar hides the auth badge while authenticated", () => {
     });
 
     assert.equal(dom.elements.get("nav-auth-badge").classList.contains("is-visible"), false);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("render hides the account card for guests and shows the inline auth prompt", () => {
+  resetStorage();
+  const dom = installProfileDom();
+
+  try {
+    profileUi.render({
+      user: null,
+      weights: [],
+      meals: [],
+      auth: {
+        status: "guest",
+        email: "",
+        hasServerData: false,
+        pendingMutationCount: 0,
+        syncStatus: "idle",
+        lastSyncAt: "",
+        lastSyncError: "",
+        lastError: ""
+      }
+    });
+
+    assert.equal(dom.elements.get("profile-auth-card").classList.contains("hidden"), true);
+    assert.equal(dom.elements.get("profile-auth-inline").classList.contains("hidden"), false);
+    assert.equal(dom.elements.get("profile-auth-modal").classList.contains("hidden"), true);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("render shows the account card for authenticated users and hides the inline auth prompt", () => {
+  resetStorage();
+  const dom = installProfileDom();
+
+  try {
+    profileUi.render({
+      user: null,
+      weights: [],
+      meals: [],
+      auth: {
+        status: "authenticated",
+        email: "member@example.com",
+        hasServerData: true,
+        pendingMutationCount: 0,
+        syncStatus: "idle",
+        lastSyncAt: "",
+        lastSyncError: "",
+        lastError: ""
+      }
+    });
+
+    assert.equal(dom.elements.get("profile-auth-card").classList.contains("hidden"), false);
+    assert.equal(dom.elements.get("profile-auth-inline").classList.contains("hidden"), true);
+    assert.equal(dom.elements.get("profile-auth-modal").classList.contains("hidden"), true);
   } finally {
     dom.restore();
   }

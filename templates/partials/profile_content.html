@@ -1,83 +1,6 @@
 <section class="app-section" id="profile-page-root">
   <h1 class="apple-title">Profile</h1>
 
-  <div class="apple-card app-card profile-auth-card">
-    <div class="profile-auth-header">
-      <div>
-        <h2 class="apple-subtitle apple-subtitle-no-margin">Account</h2>
-        <p id="profile-auth-copy" class="apple-caption apple-caption-tight">Create an account to sync this device across installs and keep your data safe.</p>
-      </div>
-      <span id="profile-auth-badge-copy" class="profile-auth-pill">Sign in required</span>
-    </div>
-
-    <div id="profile-auth-guest">
-      <input type="hidden" id="profile-auth-mode" value="signup">
-      <div class="apple-segmented profile-segmented profile-auth-segmented"
-           role="radiogroup"
-           aria-label="Account action"
-           data-profile-segment="profile-auth-mode">
-        <button type="button"
-                class="apple-segmented-btn profile-segmented-btn"
-                role="radio"
-                aria-checked="false"
-                data-profile-segment-value="signup">
-          Sign Up
-        </button>
-        <button type="button"
-                class="apple-segmented-btn profile-segmented-btn"
-                role="radio"
-                aria-checked="false"
-                data-profile-segment-value="signin">
-          Sign In
-        </button>
-      </div>
-
-      <form id="profile-auth-form" class="apple-form profile-auth-form">
-        <div>
-          <label for="profile-auth-email" class="apple-field-label">Email</label>
-          <input type="email"
-                 id="profile-auth-email"
-                 class="apple-input profile-input"
-                 inputmode="email"
-                 autocomplete="email"
-                 placeholder="you@example.com"
-                 required>
-        </div>
-        <div>
-          <label for="profile-auth-password" class="apple-field-label">Password</label>
-          <input type="password"
-                 id="profile-auth-password"
-                 class="apple-input profile-input"
-                 autocomplete="current-password"
-                 placeholder="At least 8 characters"
-                 required>
-        </div>
-        <button type="submit"
-                id="profile-auth-submit"
-                class="apple-btn apple-btn-primary apple-btn-block">
-          Create account
-        </button>
-      </form>
-    </div>
-
-    <div id="profile-auth-member" class="hidden profile-auth-member">
-      <div class="profile-auth-member-row">
-        <div>
-          <p class="apple-caption">Signed in as</p>
-          <p id="profile-auth-email-display" class="profile-stat-value">--</p>
-        </div>
-        <button type="button"
-                data-action="profile-sign-out"
-                class="apple-btn apple-btn-neutral apple-btn-compact">
-          Sign Out
-        </button>
-      </div>
-      <p id="profile-auth-sync-status" class="apple-caption apple-caption-tight"></p>
-    </div>
-
-    <p id="profile-auth-error" class="apple-caption apple-caption-tight profile-auth-error hidden"></p>
-  </div>
-
   <div class="apple-card app-card">
     <div class="profile-header">
       <img id="profile-avatar"
@@ -86,6 +9,24 @@
            class="profile-avatar">
       <h2 id="profile-name" class="apple-subtitle">--</h2>
       <p id="profile-since" class="apple-caption apple-caption-tight"></p>
+
+      <div id="profile-auth-inline" class="hidden profile-auth-inline">
+        <p id="profile-auth-inline-copy" class="apple-caption apple-caption-tight profile-auth-inline-copy">
+          Sign in or create an account to sync this device and keep your progress backed up.
+        </p>
+        <div class="profile-auth-inline-actions">
+          <button type="button"
+                  data-action="profile-open-auth-signin"
+                  class="apple-btn apple-btn-neutral apple-btn-compact">
+            Sign In
+          </button>
+          <button type="button"
+                  data-action="profile-open-auth-signup"
+                  class="apple-btn apple-btn-primary apple-btn-compact">
+            Sign Up
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -315,6 +256,110 @@
         <button type="button" data-action="close-profile-activity-modal" class="apple-btn apple-btn-neutral">Cancel</button>
         <button type="button" id="profile-activity-save-btn" data-action="save-profile-activity" class="apple-btn apple-btn-primary" disabled>Save</button>
       </div>
+    </div>
+  </div>
+
+  <div id="profile-auth-modal" class="hidden app-overlay app-overlay-calories" aria-hidden="true">
+    <div class="apple-modal apple-modal-auth" role="dialog" aria-modal="true" aria-labelledby="profile-auth-title">
+      <div class="apple-modal-header">
+        <div class="profile-auth-modal-title">
+          <h2 id="profile-auth-title" class="apple-subtitle apple-subtitle-no-margin">Account</h2>
+        </div>
+        <button type="button"
+                data-action="close-profile-auth-modal"
+                class="apple-icon-btn"
+                aria-label="Close account sign in">
+          <svg class="apple-icon apple-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div id="profile-auth-guest" class="profile-auth-modal-body">
+        <span id="profile-auth-badge-copy" class="profile-auth-pill">New account</span>
+        <input type="hidden" id="profile-auth-mode" value="signup">
+        <div class="profile-auth-segmented-shell">
+          <div class="apple-segmented profile-segmented profile-auth-segmented"
+               role="radiogroup"
+               aria-label="Account action"
+               data-profile-segment="profile-auth-mode">
+            <button type="button"
+                    class="apple-segmented-btn profile-segmented-btn"
+                    role="radio"
+                    aria-checked="false"
+                    data-profile-segment-value="signup">
+              Sign Up
+            </button>
+            <button type="button"
+                    class="apple-segmented-btn profile-segmented-btn"
+                    role="radio"
+                    aria-checked="false"
+                    data-profile-segment-value="signin">
+              Sign In
+            </button>
+          </div>
+        </div>
+
+        <p id="profile-auth-copy" class="apple-caption apple-caption-tight profile-auth-copy-inline">Create an account to sync this device across installs and keep your data safe.</p>
+
+        <form id="profile-auth-form" class="apple-form profile-auth-form">
+          <div class="profile-auth-field">
+            <label for="profile-auth-email" class="apple-field-label">Email</label>
+            <input type="email"
+                   id="profile-auth-email"
+                   class="apple-input profile-input"
+                   inputmode="email"
+                   autocomplete="email"
+                   placeholder="you@example.com"
+                   required>
+          </div>
+
+          <div class="profile-auth-field">
+            <label for="profile-auth-password" class="apple-field-label">Password</label>
+            <input type="password"
+                   id="profile-auth-password"
+                   class="apple-input profile-input"
+                   autocomplete="current-password"
+                   placeholder="At least 8 characters"
+                   required>
+          </div>
+
+          <button type="submit"
+                  id="profile-auth-submit"
+                  class="apple-btn apple-btn-primary apple-btn-block">
+            Create account
+          </button>
+        </form>
+
+        <p id="profile-auth-submit-note" class="apple-caption apple-caption-tight profile-auth-submit-note">This device will sync after you continue.</p>
+
+        <p id="profile-auth-error" class="apple-caption apple-caption-tight profile-auth-error hidden"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-auth-card" class="apple-card app-card profile-auth-card hidden">
+    <div class="profile-auth-header">
+      <div>
+        <h2 class="apple-subtitle apple-subtitle-no-margin">Account</h2>
+        <p class="apple-caption apple-caption-tight">This device is connected to your account.</p>
+      </div>
+      <span class="profile-auth-pill profile-auth-pill-connected">Connected</span>
+    </div>
+
+    <div id="profile-auth-member" class="hidden profile-auth-member">
+      <div class="profile-auth-member-row">
+        <div>
+          <p class="apple-caption">Signed in as</p>
+          <p id="profile-auth-email-display" class="profile-stat-value">--</p>
+        </div>
+        <button type="button"
+                data-action="profile-sign-out"
+                class="apple-btn apple-btn-neutral apple-btn-compact">
+          Sign Out
+        </button>
+      </div>
+      <p id="profile-auth-sync-status" class="apple-caption apple-caption-tight"></p>
     </div>
   </div>
 

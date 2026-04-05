@@ -4146,6 +4146,22 @@ html.no-view-transition .htmx-settling {
   pointer-events: none;
 }
 
+#profile-auth-modal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#profile-auth-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#profile-auth-modal.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
 #weight-modal {
   opacity: 0;
   pointer-events: none;
@@ -4284,6 +4300,30 @@ html.no-view-transition .htmx-settling {
 }
 
 #profile-activity-modal.is-closing .apple-modal-profile-activity {
+  transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
+  opacity: 0;
+}
+
+.apple-modal-auth {
+  width: min(26rem, calc(100% - 2rem));
+  max-height: min(90vh, 40rem);
+  overflow: hidden;
+  transform: translateY(var(--motion-distance-modal)) scale(var(--motion-scale-enter));
+  opacity: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.95rem;
+  transition:
+    transform var(--motion-duration-modal) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+#profile-auth-modal.is-open .apple-modal-auth {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+#profile-auth-modal.is-closing .apple-modal-auth {
   transform: translateY(calc(var(--motion-distance-modal) * 0.6)) scale(var(--motion-scale-enter));
   opacity: 0;
 }
@@ -4876,8 +4916,45 @@ html.no-view-transition .htmx-settling {
 }
 
 .profile-auth-card {
+  margin-top: 1rem;
+  padding: 1.35rem 1.25rem;
   display: grid;
   gap: 0.95rem;
+}
+
+.profile-auth-modal-title {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.profile-auth-modal-body {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  overflow-y: auto;
+  padding-right: 0.1rem;
+}
+
+.profile-auth-inline {
+  margin-top: 0.9rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  width: 100%;
+}
+
+.profile-auth-inline-copy {
+  max-width: 25rem;
+  text-align: center;
+}
+
+.profile-auth-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
 }
 
 .profile-auth-header {
@@ -4892,10 +4969,11 @@ html.no-view-transition .htmx-settling {
   align-items: center;
   justify-content: center;
   min-height: 1.9rem;
-  padding: 0.34rem 0.7rem;
+  width: fit-content;
+  padding: 0.34rem 0.72rem;
   border-radius: var(--apple-radius-pill);
-  background: color-mix(in srgb, var(--apple-destructive) 12%, var(--apple-surface));
-  color: var(--apple-destructive);
+  background: var(--apple-fill);
+  color: var(--apple-secondary-label);
   white-space: nowrap;
   font-size: 0.74rem;
   line-height: 1;
@@ -4903,13 +4981,46 @@ html.no-view-transition .htmx-settling {
   font-weight: 680;
 }
 
+.profile-auth-pill-connected {
+  background: color-mix(in srgb, var(--apple-accent) 12%, var(--apple-surface));
+  color: var(--apple-accent);
+}
+
+.profile-auth-segmented-shell {
+  width: 100%;
+  padding: 0.22rem;
+  border-radius: calc(var(--apple-radius-control) + 0.1rem);
+  background: var(--apple-fill);
+  border: 1px solid var(--apple-separator);
+}
+
 .profile-auth-form {
-  margin-top: 0.95rem;
+  margin-top: 0;
   gap: 0.8rem;
 }
 
 .profile-auth-segmented {
-  max-width: 18rem;
+  width: 100%;
+  max-width: none;
+}
+
+.profile-auth-copy-inline {
+  margin: 0;
+  color: var(--apple-label);
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.profile-auth-field {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.profile-auth-submit-note {
+  margin: 0;
+  text-align: center;
+  color: var(--apple-secondary-label);
+  font-size: 0.7rem;
 }
 
 .profile-auth-member {
@@ -4926,6 +5037,14 @@ html.no-view-transition .htmx-settling {
 
 .profile-auth-error {
   color: var(--apple-destructive);
+}
+
+.profile-auth-error:not(.hidden) {
+  margin: 0;
+  padding: 0.78rem 0.9rem;
+  border-radius: calc(var(--apple-radius-control) + 0.1rem);
+  border: 1px solid color-mix(in srgb, var(--apple-destructive) 26%, #fecaca 74%);
+  background: color-mix(in srgb, #fff1f2 78%, #fee2e2 22%);
 }
 
 .profile-avatar {
@@ -5182,6 +5301,15 @@ html.no-view-transition .htmx-settling {
   .profile-auth-member-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .apple-modal-auth {
+    width: calc(100% - 1rem);
+    max-height: min(92vh, 40rem);
+  }
+
+  .profile-auth-inline-actions {
+    width: 100%;
   }
 
   .profile-advanced-header {
@@ -5756,10 +5884,20 @@ html.no-view-transition .htmx-settling {
     padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.72rem);
   }
 
+  #profile-auth-modal.app-overlay-calories {
+    padding-top: calc(3.5rem + env(safe-area-inset-top) + 0.95rem);
+    padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.95rem);
+  }
+
   .apple-modal-calories {
     width: min(26rem, 100%);
     max-height: 100%;
     padding: 1rem;
+  }
+
+  .apple-modal-auth {
+    width: min(26rem, 100%);
+    max-height: 100%;
   }
 
   .apple-modal-calorie-sheet {

@@ -22,13 +22,36 @@ import {
   getLatestWeightKg
 } from "../modules/calories-utils.mjs";
 import { formatDate, formatWeightWithUnit, getHeightDisplay } from "../modules/data-utils.mjs";
+import { createBodyScrollLock } from "../modules/scroll-lock.mjs";
 
 let latestState = null;
 let activityModalCloseTimer = null;
+let authModalCloseTimer = null;
 let pendingActivityLevel = "";
 let profilePersistTimer = null;
 let authFeedback = "";
 let authSubmitting = false;
+let authTouchStartY = 0;
+
+function getProfileRoot() {
+  return document.getElementById("profile-page-root");
+}
+
+function isMobileProfileUI() {
+  const ua = navigator.userAgent || "";
+  const touchPoints = navigator.maxTouchPoints || 0;
+  const isIpad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && touchPoints > 1);
+  if (isIpad) return true;
+
+  const isTouchDevice = touchPoints > 0 || ("ontouchstart" in window);
+  if (!isTouchDevice) return false;
+
+  return window.matchMedia("(max-width: 1024px)").matches || /Android|iPhone|iPod|Mobile|Tablet/i.test(ua);
+}
+
+const authModalScrollLock = createBodyScrollLock({
+  isMobileUi: isMobileProfileUI
+});
 
 function getAvatarGender(user) {
   const profile = user && user.calorieProfile ? user.calorieProfile : null;
@@ -91,42 +114,81 @@ function setAuthFeedback(message) {
   errorEl.classList.toggle("hidden", !authFeedback);
 }
 
+function renderInlineAuthAction(authState) {
+  const inlineEl = document.getElementById("profile-auth-inline");
+  const inlineCopyEl = document.getElementById("profile-auth-inline-copy");
+  const visible = authState.status !== "authenticated";
+
+  if (inlineEl) {
+    inlineEl.classList.toggle("hidden", !visible);
+  }
+
+  if (inlineCopyEl) {
+    inlineCopyEl.textContent = "Sign in or create an account to sync this device and keep your progress backed up.";
+  }
+}
+
 function renderAuthCard(state) {
   const authState = getAuthState(state);
+  if (authState.status === "authenticated") {
+    closeAuthModal(true);
+  }
+
+  const cardEl = document.getElementById("profile-auth-card");
   const guestEl = document.getElementById("profile-auth-guest");
   const memberEl = document.getElementById("profile-auth-member");
+  const titleEl = document.getElementById("profile-auth-title");
   const copyEl = document.getElementById("profile-auth-copy");
   const pillEl = document.getElementById("profile-auth-badge-copy");
   const submitButton = document.getElementById("profile-auth-submit");
+  const submitNoteEl = document.getElementById("profile-auth-submit-note");
   const emailDisplay = document.getElementById("profile-auth-email-display");
   const syncStatus = document.getElementById("profile-auth-sync-status");
   const authModeInput = document.getElementById("profile-auth-mode");
   const passwordInput = document.getElementById("profile-auth-password");
+  const authMode = authModeInput ? normalizeAuthMode(authModeInput.value) : "signup";
 
   renderAuthReminderBadge(authState);
+  renderInlineAuthAction(authState);
+
+  if (cardEl) {
+    cardEl.classList.toggle("hidden", authState.status !== "authenticated");
+  }
 
   if (guestEl) guestEl.classList.toggle("hidden", authState.status === "authenticated");
   if (memberEl) memberEl.classList.toggle("hidden", authState.status !== "authenticated");
 
+  if (titleEl) {
+    titleEl.textContent = "Account";
+  }
+
   if (copyEl) {
-    const authMode = authModeInput ? normalizeAuthMode(authModeInput.value) : "signup";
     copyEl.textContent = authState.status === "authenticated"
       ? "This device is connected to your account."
       : authMode === "signin"
-        ? "Sign back in to pull your saved data from the server."
-        : "Create an account to sync this device across installs and keep your data safe.";
+        ? "Sign in to sync this device with your saved data."
+        : "Create an account to sync this device and keep your data safe.";
   }
 
   if (pillEl) {
-    pillEl.textContent = authState.status === "authenticated" ? "Connected" : "Sign in required";
+    pillEl.textContent = authState.status === "authenticated"
+      ? "Connected"
+      : authMode === "signin"
+        ? "Existing account"
+        : "New account";
   }
 
   if (submitButton) {
-    const authMode = authModeInput ? normalizeAuthMode(authModeInput.value) : "signup";
     submitButton.textContent = authSubmitting
       ? (authMode === "signin" ? "Signing in..." : "Creating account...")
       : (authMode === "signin" ? "Sign in" : "Create account");
     submitButton.disabled = authSubmitting;
+  }
+
+  if (submitNoteEl) {
+    submitNoteEl.textContent = authMode === "signin"
+      ? "Saved account data will sync after sign in."
+      : "This device will sync after account creation.";
   }
 
   if (emailDisplay) {
@@ -142,6 +204,122 @@ function renderAuthCard(state) {
   }
 
   setAuthFeedback(authFeedback || authState.lastError || "");
+}
+
+function isAuthModalOpen() {
+  const modal = document.getElementById("profile-auth-modal");
+  return !!(modal && !modal.classList.contains("hidden") && modal.classList.contains("is-open"));
+}
+
+function getAuthScrollableContainer(target) {
+  if (!target || typeof target.closest !== "function") return null;
+  return target.closest(".profile-auth-modal-body");
+}
+
+function shouldClampAuthScroll(scroller, deltaY) {
+  if (!scroller) return true;
+  if (scroller.scrollHeight <= scroller.clientHeight + 1) return true;
+
+  const atTop = scroller.scrollTop <= 0;
+  const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+  return (atTop && deltaY > 0) || (atBottom && deltaY < 0);
+}
+
+function handleAuthModalTouchStart(event) {
+  if (!isAuthModalOpen()) return;
+  authTouchStartY = event.touches && event.touches[0] ? event.touches[0].clientY : 0;
+}
+
+function handleAuthModalTouchMove(event) {
+  if (!isAuthModalOpen()) return;
+
+  const scroller = getAuthScrollableContainer(event.target);
+  if (!scroller) {
+    event.preventDefault();
+    return;
+  }
+
+  const currentY = event.touches && event.touches[0] ? event.touches[0].clientY : authTouchStartY;
+  const deltaY = currentY - authTouchStartY;
+  if (shouldClampAuthScroll(scroller, deltaY)) {
+    event.preventDefault();
+  }
+}
+
+function handleAuthModalWheel(event) {
+  if (!isAuthModalOpen()) return;
+
+  const scroller = getAuthScrollableContainer(event.target);
+  if (!scroller) {
+    event.preventDefault();
+    return;
+  }
+
+  if (shouldClampAuthScroll(scroller, event.deltaY)) {
+    event.preventDefault();
+  }
+}
+
+function closeAuthModal(immediate = false) {
+  const modal = document.getElementById("profile-auth-modal");
+  if (!modal) {
+    authModalScrollLock.unlockNow();
+    return;
+  }
+
+  if (authModalCloseTimer !== null) {
+    window.clearTimeout(authModalCloseTimer);
+    authModalCloseTimer = null;
+  }
+
+  if (immediate || modal.classList.contains("hidden")) {
+    modal.classList.add("hidden");
+    modal.classList.remove("is-open", "is-closing");
+    modal.setAttribute("aria-hidden", "true");
+    authModalScrollLock.unlockNow();
+    return;
+  }
+
+  modal.classList.remove("is-open");
+  modal.classList.add("is-closing");
+  modal.setAttribute("aria-hidden", "true");
+
+  authModalCloseTimer = window.setTimeout(() => {
+    modal.classList.add("hidden");
+    modal.classList.remove("is-closing");
+    authModalCloseTimer = null;
+    authModalScrollLock.unlockAfterKeyboard();
+  }, 220);
+}
+
+function openAuthModal(mode = "signup") {
+  authFeedback = "";
+  setProfileSegmentValue("profile-auth-mode", normalizeAuthMode(mode));
+  renderAuthCard(latestState || loadState());
+
+  const modal = document.getElementById("profile-auth-modal");
+  if (!modal) return;
+
+  if (authModalCloseTimer !== null) {
+    window.clearTimeout(authModalCloseTimer);
+    authModalCloseTimer = null;
+  }
+
+  modal.classList.remove("hidden");
+  modal.classList.remove("is-closing");
+  modal.setAttribute("aria-hidden", "false");
+  authModalScrollLock.lock();
+
+  requestAnimationFrame(() => {
+    modal.classList.add("is-open");
+  });
+
+  const emailInput = document.getElementById("profile-auth-email");
+  if (emailInput && typeof emailInput.focus === "function") {
+    window.setTimeout(() => {
+      emailInput.focus();
+    }, 90);
+  }
 }
 
 function isValidActivityLevel(activityLevel) {
@@ -722,10 +900,20 @@ async function handleProfileSignOut() {
 }
 
 function bindProfileEvents() {
-  const root = document.getElementById("profile-page-root");
+  const root = getProfileRoot();
   if (!root || root.dataset.profileBound === "1") return;
 
   root.dataset.profileBound = "1";
+
+  const authModal = document.getElementById("profile-auth-modal");
+  if (authModal
+    && typeof authModal.addEventListener === "function"
+    && authModal.dataset.profileScrollGuardBound !== "1") {
+    authModal.dataset.profileScrollGuardBound = "1";
+    authModal.addEventListener("touchstart", handleAuthModalTouchStart, { passive: true });
+    authModal.addEventListener("touchmove", handleAuthModalTouchMove, { passive: false });
+    authModal.addEventListener("wheel", handleAuthModalWheel, { passive: false });
+  }
 
   root.addEventListener("click", (event) => {
     const target = event.target;
@@ -752,6 +940,21 @@ function bindProfileEvents() {
 
       if (actionName === "reset-protein-goal-default") {
         resetProteinGoalDefault();
+        return;
+      }
+
+      if (actionName === "profile-open-auth-signin") {
+        openAuthModal("signin");
+        return;
+      }
+
+      if (actionName === "profile-open-auth-signup") {
+        openAuthModal("signup");
+        return;
+      }
+
+      if (actionName === "close-profile-auth-modal") {
+        closeAuthModal();
         return;
       }
 
@@ -808,6 +1011,12 @@ function bindProfileEvents() {
     const activityModal = document.getElementById("profile-activity-modal");
     if (target === activityModal) {
       closeActivityModal();
+      return;
+    }
+
+    const authModal = document.getElementById("profile-auth-modal");
+    if (target === authModal) {
+      closeAuthModal();
     }
   });
 
@@ -888,9 +1097,35 @@ export function renderNavAvatar(user, authState = null) {
 }
 
 export function handleEscape() {
+  if (isAuthModalOpen()) {
+    closeAuthModal();
+    return;
+  }
+
   if (isActivityModalOpen()) {
     closeActivityModal();
   }
+}
+
+function hideActivityModalImmediately() {
+  const modal = document.getElementById("profile-activity-modal");
+  if (activityModalCloseTimer !== null) {
+    window.clearTimeout(activityModalCloseTimer);
+    activityModalCloseTimer = null;
+  }
+  if (!modal) return;
+
+  modal.classList.add("hidden");
+  modal.classList.remove("is-open", "is-closing");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+export function resetViewUiState() {
+  authFeedback = "";
+  authSubmitting = false;
+  hideActivityModalImmediately();
+  closeAuthModal(true);
+  authModalScrollLock.unlockNow();
 }
 
 export function render(state) {
@@ -936,5 +1171,15 @@ export function render(state) {
       modal.classList.remove("is-open", "is-closing");
       modal.setAttribute("aria-hidden", "true");
     }
+  }
+
+  if (!isAuthModalOpen()) {
+    const modal = document.getElementById("profile-auth-modal");
+    if (modal) {
+      modal.classList.add("hidden");
+      modal.classList.remove("is-open", "is-closing");
+      modal.setAttribute("aria-hidden", "true");
+    }
+    authModalScrollLock.unlockNow();
   }
 }

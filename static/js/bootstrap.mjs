@@ -12,7 +12,8 @@ import { render as renderDashboard } from "./views/dashboard-ui.mjs";
 import {
   handleEscape as handleProfileEscape,
   render as renderProfile,
-  renderNavAvatar
+  renderNavAvatar,
+  resetViewUiState as resetProfileViewUiState
 } from "./views/profile-ui.mjs";
 import {
   closeDeleteSheet,
@@ -267,6 +268,7 @@ function detectActiveView() {
 }
 
 function resetAllViewUiState() {
+  resetProfileViewUiState();
   resetWeightsViewUiState();
   resetCaloriesViewUiState();
 }
