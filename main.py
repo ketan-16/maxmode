@@ -1,6 +1,9 @@
 import base64
 import hashlib
 import json
+import logging
+import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.parse import urlencode
@@ -36,6 +39,9 @@ MAX_AVATAR_SIZE = 256
 MAX_ANALYSIS_IMAGES = 3
 MAX_ANALYSIS_IMAGE_BYTES = 4 * 1024 * 1024
 NOTIONISTS_AVATAR_API = "https://api.dicebear.com/9.x/notionists/svg"
+REQUEST_LOGGER_NAME = "maxmode.http"
+REQUEST_ID_HEADER = "X-Request-ID"
+REQUEST_LOG_EXCLUDED_PREFIXES = ("/static",)
 PRECACHE_PAGES = (
     "/",
     "/weights",
@@ -134,6 +140,16 @@ MALE_HAIR_VARIANTS = tuple(
     if variant not in FEMALE_HAIR_VARIANTS
 )
 
+request_logger = logging.getLogger(REQUEST_LOGGER_NAME)
+if not request_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    request_logger.addHandler(handler)
+request_logger.setLevel(logging.INFO)
+request_logger.propagate = False
+
 app = FastAPI(title="MaxMode")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -213,6 +229,34 @@ def _page_response(request: Request, full: str, partial: str):
 
 def _request_origin(request: Request) -> str:
     return f"{request.url.scheme}://{request.url.netloc}"
+
+
+def _should_log_request(request: Request) -> bool:
+    path = request.url.path
+    return not path.startswith(REQUEST_LOG_EXCLUDED_PREFIXES)
+
+
+def _request_id_for_log(request: Request) -> str:
+    request_id = request.headers.get(REQUEST_ID_HEADER)
+    if request_id:
+        return request_id[:128]
+    return uuid.uuid4().hex
+
+
+def _request_client_address(request: Request) -> str:
+    if request.client and request.client.host:
+        return request.client.host
+    return "-"
+
+
+def _disable_uvicorn_access_logs() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.handlers.clear()
+    access_logger.propagate = False
+    access_logger.disabled = True
+
+
+_disable_uvicorn_access_logs()
 
 
 def _enforce_same_origin(request: Request):
@@ -372,7 +416,46 @@ async def _read_upload_payload(upload: UploadFile | None):
 
 @app.on_event("startup")
 async def _startup():
+    _disable_uvicorn_access_logs()
     ensure_database_ready()
+
+
+@app.middleware("http")
+async def log_http_requests(request: Request, call_next):
+    if not _should_log_request(request):
+        return await call_next(request)
+
+    request_id = _request_id_for_log(request)
+    request.state.request_id = request_id
+    started_at = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started_at) * 1000
+        request_logger.exception(
+            "http_request method=%s path=%s status=500 duration_ms=%.2f client=%s request_id=%s",
+            request.method,
+            request.url.path,
+            duration_ms,
+            _request_client_address(request),
+            request_id,
+        )
+        raise
+
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    if REQUEST_ID_HEADER not in response.headers:
+        response.headers[REQUEST_ID_HEADER] = request_id
+    request_logger.info(
+        "http_request method=%s path=%s status=%s duration_ms=%.2f client=%s request_id=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        _request_client_address(request),
+        request_id,
+    )
+    return response
 
 
 @app.get("/")

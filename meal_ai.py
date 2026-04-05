@@ -1,5 +1,8 @@
 import base64
+import contextlib
+import io
 import json
+import logging
 import os
 import re
 from typing import Any, Literal
@@ -18,6 +21,7 @@ OPENAI_WEB_SEARCH_TOOL = {
     "search_context_size": "low",
 }
 MAX_MEAL_SOURCE_COUNT = 5
+LITELLM_LOGGER_NAMES = ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy")
 APPROXIMATE_GRAM_PREFIX_PATTERN = r"(?:~|about|around|approx(?:\.|imately)?)\s*"
 PROTEIN_GRAM_VALUE_PATTERN = (
     rf"(?:{APPROXIMATE_GRAM_PREFIX_PATTERN})?"
@@ -78,6 +82,19 @@ class MealEstimateSchema(BaseModel):
     protein_grams_visible_in_image: bool = False
 
     model_config = {"extra": "forbid"}
+
+
+def _silence_litellm_loggers() -> None:
+    for logger_name in LITELLM_LOGGER_NAMES:
+        logger = logging.getLogger(logger_name)
+        logger.disabled = True
+        logger.propagate = False
+
+
+@contextlib.contextmanager
+def _suppress_litellm_console_noise():
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        yield
 
 
 def _extract_response_text(response: Any) -> str:
@@ -482,21 +499,23 @@ def _analyze_with_openai_responses(
     normalized_images: list[dict[str, str]],
     mode: str,
 ) -> tuple[dict[str, Any], list[str]]:
+    _silence_litellm_loggers()
     try:
         from litellm.responses.main import responses
     except ImportError as exc:
         raise MealAnalysisError("LiteLLM is not installed.") from exc
 
-    response = responses(
-        model=model,
-        instructions=SYSTEM_PROMPT,
-        input=_build_openai_responses_input(note, normalized_images, mode),
-        tools=[OPENAI_WEB_SEARCH_TOOL],
-        include=["web_search_call.action.sources"],
-        text_format=MealEstimateSchema,
-        temperature=MEAL_AI_TEMPERATURE,
-        timeout=45,
-    )
+    with _suppress_litellm_console_noise():
+        response = responses(
+            model=model,
+            instructions=SYSTEM_PROMPT,
+            input=_build_openai_responses_input(note, normalized_images, mode),
+            tools=[OPENAI_WEB_SEARCH_TOOL],
+            include=["web_search_call.action.sources"],
+            text_format=MealEstimateSchema,
+            temperature=MEAL_AI_TEMPERATURE,
+            timeout=45,
+        )
 
     raw_text = _extract_responses_text(response)
     payload = _extract_json_payload(raw_text)
@@ -510,23 +529,25 @@ def _analyze_with_completion(
     normalized_images: list[dict[str, str]],
     mode: str,
 ) -> dict[str, Any]:
+    _silence_litellm_loggers()
     try:
         from litellm import completion
     except ImportError as exc:
         raise MealAnalysisError("LiteLLM is not installed.") from exc
 
-    response = completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": _build_user_content(note, normalized_images, mode)
-            }
-        ],
-        temperature=MEAL_AI_TEMPERATURE,
-        timeout=45,
-    )
+    with _suppress_litellm_console_noise():
+        response = completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": _build_user_content(note, normalized_images, mode)
+                }
+            ],
+            temperature=MEAL_AI_TEMPERATURE,
+            timeout=45,
+        )
 
     raw_text = _extract_response_text(response)
     return _extract_json_payload(raw_text)

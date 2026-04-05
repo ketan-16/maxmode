@@ -1,15 +1,21 @@
 import os
+import logging
 import sys
 import types
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from unittest.mock import Mock, patch
 
 from meal_ai import (
     MEAL_AI_TEMPERATURE,
     OPENAI_WEB_SEARCH_TOOL,
+    LITELLM_LOGGER_NAMES,
     _apply_ai_calculation_mode,
     _note_has_explicit_protein_grams,
     _normalize_meal_payload,
+    _suppress_litellm_console_noise,
+    _silence_litellm_loggers,
     analyze_logged_meal,
 )
 
@@ -28,6 +34,39 @@ def normalized_meal(**overrides):
 
 
 class MealAiTests(unittest.TestCase):
+    def test_silence_litellm_loggers_disables_library_loggers(self):
+        previous_states: dict[str, tuple[bool, bool]] = {}
+        for logger_name in LITELLM_LOGGER_NAMES:
+            logger = logging.getLogger(logger_name)
+            previous_states[logger_name] = (logger.disabled, logger.propagate)
+            logger.disabled = False
+            logger.propagate = True
+
+        try:
+            _silence_litellm_loggers()
+            for logger_name in LITELLM_LOGGER_NAMES:
+                with self.subTest(logger_name=logger_name):
+                    logger = logging.getLogger(logger_name)
+                    self.assertTrue(logger.disabled)
+                    self.assertFalse(logger.propagate)
+        finally:
+            for logger_name, (disabled, propagate) in previous_states.items():
+                logger = logging.getLogger(logger_name)
+                logger.disabled = disabled
+                logger.propagate = propagate
+
+    def test_suppress_litellm_console_noise_redirects_stdout_and_stderr(self):
+        stdout_buffer = StringIO()
+        stderr_buffer = StringIO()
+
+        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+            with _suppress_litellm_console_noise():
+                print("Provider List: https://docs.litellm.ai/docs/providers")
+                print("Provider List: https://docs.litellm.ai/docs/providers", file=sys.stderr)
+
+        self.assertEqual(stdout_buffer.getvalue(), "")
+        self.assertEqual(stderr_buffer.getvalue(), "")
+
     def test_balanced_mode_leaves_normalized_meal_unchanged(self):
         meal = normalized_meal()
 

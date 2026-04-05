@@ -316,6 +316,9 @@ async def apply_sync_request(db: AsyncSession, account_id: str, request: SyncReq
         )
         applied_ids.append(mutation.mutationId)
 
+    # Flush pending ORM writes before re-reading rows for the response payload.
+    await db.flush()
+
     account = await db.get(Account, account_id)
     if account is None:
         raise AuthError("Account not found.")
